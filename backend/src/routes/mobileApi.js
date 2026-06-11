@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import express from 'express';
 import { pool, withTransaction } from '../db/pool.js';
 import { requireApiUser } from '../middleware/auth.js';
+import { exportConteoExcel } from '../services/excelService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/errors.js';
 import { randomToken, sha256 } from '../utils/hash.js';
@@ -222,9 +223,18 @@ mobileApi.post('/finalizar_conteo', requireApiUser, asyncHandler(async (req, res
     await db.query('UPDATE tomas_fisicas SET archivo_excel = NULL WHERE id = $1', [conteo.toma_id]);
     await closeTomaIfComplete(db, conteo.toma_id);
     await refreshTomaSummary(db, conteo.toma_id);
-    return { ok: true, conteo_id: conteoId, conteo_version: version, download_url: `/api/conteos/${conteoId}/excel` };
+    return { ok: true, conteo_id: conteoId, conteo_version: version, download_url: `/api/v1/conteos/${conteoId}/excel` };
   });
   res.json(response);
+}));
+
+mobileApi.get('/conteos/:id/excel', requireApiUser, asyncHandler(async (req, res) => {
+  const conteoId = Number(req.params.id || 0);
+  if (conteoId <= 0) {
+    throw new AppError('Conteo invalido', 422);
+  }
+  const file = await exportConteoExcel(conteoId, req.user);
+  res.download(file.fullPath, file.filename);
 }));
 
 async function saveConteo(userId, conteoId, expectedVersion, upsert, remove, replace) {
@@ -245,4 +255,3 @@ async function saveConteo(userId, conteoId, expectedVersion, upsert, remove, rep
     return { ok: true, conteo_id: conteoId, conteo_version: version, lineas };
   });
 }
-

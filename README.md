@@ -6,6 +6,7 @@ Migracion de `centro_ruliman_inventario` desde PHP/MySQL a PERN:
 - Express para API y autenticacion.
 - React + Vite para panel web responsive inspirado en TailAdmin.
 - Compatibilidad con la APK en `/api/v1/*`.
+- Importacion y exportacion Excel con `exceljs`, sin depender de `xlsx`.
 
 ## Requisitos
 
@@ -68,6 +69,17 @@ Las rutas moviles del PHP se conservan bajo `/api/v1`:
 
 Tambien se montan en `/api/*` para compatibilidad web.
 
+## Flujos Excel portados
+
+El backend incluye endpoints protegidos con JWT para reemplazar los flujos PHP de PhpSpreadsheet:
+
+- `POST /api/admin/productos/import`: importa `.xlsx` o `.csv` con columnas `codigo` y `descripcion`.
+- `GET /api/admin/conteos/:id/excel`: descarga detalle de conteo finalizado con columnas `Codigo`, `Descripcion`, `Cantidad`, `Usuario`.
+- `POST /api/admin/tomas/:id/consolidado`: genera consolidado de toma por usuario.
+- `GET /api/admin/tomas/:id/consolidado`: descarga el consolidado.
+
+Los archivos temporales y exportados se guardan en `backend/storage`, carpeta ignorada por git.
+
 ## Migracion de datos desde MySQL
 
 El esquema PostgreSQL esta en `backend/src/db/migrations/001_init.sql`.
@@ -84,4 +96,3 @@ Para migrar datos reales desde el PHP actual, exporta las tablas MySQL y cargala
 - `login_attempts`
 
 Los hashes de password PHP generados por `password_hash` se validan con `bcrypt`, por lo que se pueden conservar.
-

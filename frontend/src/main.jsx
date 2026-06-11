@@ -18,10 +18,11 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api/admin
 
 function api(token) {
   return async (path, options = {}) => {
+    const isFormData = options.body instanceof FormData;
     const response = await fetch(`${API_URL}${path}`, {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers || {})
       }
@@ -32,6 +33,25 @@ function api(token) {
     }
     return data;
   };
+}
+
+async function downloadFile(token, path) {
+  const response = await fetch(`${API_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ message: 'No se pudo descargar el archivo' }));
+    throw new Error(data.message || 'No se pudo descargar el archivo');
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get('content-disposition') || '';
+  const filename = disposition.match(/filename="?([^"]+)"?/i)?.[1] || 'reporte.xlsx';
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 const nav = [
@@ -97,7 +117,7 @@ function App() {
             </button>
           </div>
         </header>
-        <Current request={request} user={user} />
+        <Current request={request} user={user} token={token} />
       </main>
     </div>
   );
@@ -202,6 +222,7 @@ function Productos({ request }) {
   const [items, setItems] = useState([]);
   const [q, setQ] = useState('');
   const [form, setForm] = useState({ codigo: '', descripcion: '' });
+  const [importMessage, setImportMessage] = useState('');
   const load = () => request(`/productos?q=${encodeURIComponent(q)}`).then((data) => setItems(data.productos));
   useEffect(() => { load(); }, []);
   async function submit(event) {
@@ -210,6 +231,17 @@ function Productos({ request }) {
     setForm({ codigo: '', descripcion: '' });
     load();
   }
+  async function importFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const body = new FormData();
+    body.append('archivo', file);
+    const data = await request('/productos/import', { method: 'POST', body });
+    const info = data.importacion;
+    setImportMessage(`Importados ${info.procesados}: ${info.insertados} nuevos, ${info.actualizados} actualizados, ${info.omitidos} omitidos.`);
+    load();
+    event.target.value = '';
+  }
   return (
     <Crud title="Productos" q={q} setQ={setQ} onSearch={load}>
       <form className="inline-form" onSubmit={submit}>
@@ -217,6 +249,13 @@ function Productos({ request }) {
         <input placeholder="Descripcion" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
         <button className="primary">Guardar</button>
       </form>
+      <div className="file-action">
+        <label className="file-label">
+          Importar productos
+          <input type="file" accept=".xlsx,.csv" onChange={importFile} />
+        </label>
+        {importMessage ? <span>{importMessage}</span> : null}
+      </div>
       <DataTable columns={['codigo', 'descripcion', 'estado']} rows={items} />
     </Crud>
   );
@@ -274,16 +313,39 @@ function Usuarios({ request }) {
   );
 }
 
-function Tomas({ request }) {
+function Tomas({ request, token }) {
   const [items, setItems] = useState([]);
   useEffect(() => { request('/tomas').then((data) => setItems(data.tomas)); }, [request]);
-  return <Panel><DataTable columns={['numero_toma', 'nombre_toma', 'agencia', 'estado', 'usuarios_asignados', 'usuarios_finalizados']} rows={items} /></Panel>;
+  async function consolidado(toma) {
+    await request(`/tomas/${toma.id}/consolidado`, { method: 'POST', body: JSON.stringify({}) });
+    await downloadFile(token, `/tomas/${toma.id}/consolidado`);
+  }
+  return (
+    <Panel>
+      <DataTable
+        columns={['numero_toma', 'nombre_toma', 'agencia', 'estado', 'usuarios_asignados', 'usuarios_finalizados', 'acciones']}
+        rows={items.map((item) => ({ ...item, acciones: <button className="table-btn" onClick={() => consolidado(item)}>Consolidado</button> }))}
+      />
+    </Panel>
+  );
 }
 
-function Conteos({ request }) {
+function Conteos({ request, token }) {
   const [items, setItems] = useState([]);
   useEffect(() => { request('/conteos').then((data) => setItems(data.conteos)); }, [request]);
-  return <Panel><DataTable columns={['numero_toma', 'usuario_nombre', 'estado', 'version', 'fecha_inicio', 'fecha_finalizacion']} rows={items} /></Panel>;
+  return (
+    <Panel>
+      <DataTable
+        columns={['numero_toma', 'usuario_nombre', 'estado', 'version', 'fecha_inicio', 'fecha_finalizacion', 'acciones']}
+        rows={items.map((item) => ({
+          ...item,
+          acciones: item.estado === 'finalizado'
+            ? <button className="table-btn" onClick={() => downloadFile(token, `/conteos/${item.id}/excel`)}>Excel</button>
+            : '-'
+        }))}
+      />
+    </Panel>
+  );
 }
 
 function Crud({ children, q, setQ, onSearch }) {
@@ -321,10 +383,10 @@ function DataTable({ columns, rows }) {
 }
 
 function formatValue(value) {
+  if (React.isValidElement(value)) return value;
   if (typeof value === 'boolean') return value ? 'Activo' : 'Inactivo';
   if (value == null) return '-';
   return String(value);
 }
 
 createRoot(document.getElementById('root')).render(<App />);
-

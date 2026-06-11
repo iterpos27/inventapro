@@ -176,7 +176,8 @@ h1 {
 }
 
 .searchbar,
-.inline-form {
+.inline-form,
+.file-action {
   display: grid;
   gap: 10px;
   margin-bottom: 16px;
@@ -189,6 +190,16 @@ h1 {
 
 .inline-form {
   grid-template-columns: repeat(4, minmax(120px, 1fr)) auto;
+}
+
+.file-action {
+  grid-template-columns: minmax(180px, max-content) 1fr;
+  align-items: center;
+}
+
+.file-action span {
+  color: #475467;
+  font-size: 14px;
 }
 
 input,
@@ -209,13 +220,34 @@ label {
 }
 
 button.primary,
-.searchbar button {
+.searchbar button,
+.table-btn,
+.file-label {
   border: 0;
   border-radius: 8px;
   padding: 10px 14px;
   background: #1570ef;
   color: white;
   font-weight: 700;
+}
+
+.table-btn {
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.file-label {
+  display: inline-grid;
+  place-items: center;
+  gap: 0;
+  text-align: center;
+  min-height: 40px;
+}
+
+.file-label input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .table-wrap {
@@ -315,6 +347,10 @@ th {
   }
 
   .inline-form {
+    grid-template-columns: 1fr;
+  }
+
+  .file-action {
     grid-template-columns: 1fr;
   }
 }

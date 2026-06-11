@@ -1,13 +1,26 @@
 import bcrypt from 'bcryptjs';
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import multer from 'multer';
 import { config } from '../config.js';
 import { pool, withTransaction } from '../db/pool.js';
 import { requirePermission, requireWebUser } from '../middleware/auth.js';
+import {
+  exportConteoExcel,
+  generateConsolidadoExcel,
+  importProductsFromFile,
+  importStorageDir,
+  ensureStorage
+} from '../services/excelService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/errors.js';
 
 export const webApi = express.Router();
+await ensureStorage();
+const upload = multer({
+  dest: importStorageDir(),
+  limits: { fileSize: 30 * 1024 * 1024 }
+});
 
 webApi.post('/auth/login', asyncHandler(async (req, res) => {
   const usuario = String(req.body.usuario || '').trim();
@@ -75,6 +88,14 @@ webApi.post('/productos', requireWebUser, requirePermission('admin'), asyncHandl
     [codigo, descripcion]
   );
   res.status(201).json({ ok: true, producto: rows[0] });
+}));
+
+webApi.post('/productos/import', requireWebUser, requirePermission('admin'), upload.single('archivo'), asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new AppError('Seleccione un archivo valido', 422);
+  }
+  const summary = await importProductsFromFile(req.file, req.user.id);
+  res.status(201).json({ ok: true, importacion: summary });
 }));
 
 webApi.patch('/productos/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
@@ -180,6 +201,33 @@ webApi.get('/conteos', requireWebUser, asyncHandler(async (req, res) => {
   res.json({ ok: true, conteos: rows });
 }));
 
+webApi.get('/conteos/:id/excel', requireWebUser, asyncHandler(async (req, res) => {
+  const conteoId = Number(req.params.id || 0);
+  if (conteoId <= 0) {
+    throw new AppError('Conteo invalido', 422);
+  }
+  const file = await exportConteoExcel(conteoId, req.user);
+  res.download(file.fullPath, file.filename);
+}));
+
+webApi.post('/tomas/:id/consolidado', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const tomaId = Number(req.params.id || 0);
+  if (tomaId <= 0) {
+    throw new AppError('Toma invalida', 422);
+  }
+  const file = await generateConsolidadoExcel(tomaId);
+  res.json({ ok: true, archivo: file.filename, download_url: `/api/admin/tomas/${tomaId}/consolidado` });
+}));
+
+webApi.get('/tomas/:id/consolidado', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const tomaId = Number(req.params.id || 0);
+  if (tomaId <= 0) {
+    throw new AppError('Toma invalida', 422);
+  }
+  const file = await generateConsolidadoExcel(tomaId);
+  res.download(file.fullPath, file.filename);
+}));
+
 function publicUser(user) {
   return {
     id: Number(user.id),
@@ -188,4 +236,3 @@ function publicUser(user) {
     rol: user.rol
   };
 }
-
