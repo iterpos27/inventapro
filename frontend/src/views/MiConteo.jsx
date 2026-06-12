@@ -31,6 +31,10 @@ function getCachedSearch(term) {
   return readSearchCache()[term] || null;
 }
 
+function normalizeSearchTerm(term) {
+  return String(term || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 function setCachedSearch(term, productos) {
   try {
     const cache = readSearchCache();
@@ -116,7 +120,7 @@ export function MiConteo({ request }) {
 
   useEffect(() => {
     window.clearTimeout(searchTimerRef.current);
-    const term = q.trim();
+    const term = normalizeSearchTerm(q);
     if (!term || term.length < 3) {
       setResults([]);
       return;
@@ -176,7 +180,7 @@ export function MiConteo({ request }) {
 
   async function searchProducts(term = q) {
     setError('');
-    const cleanTerm = term.trim();
+    const cleanTerm = normalizeSearchTerm(term);
     if (cleanTerm.length < 3) {
       setResults([]);
       return;

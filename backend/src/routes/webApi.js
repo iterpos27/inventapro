@@ -32,6 +32,39 @@ const upload = multer({
   dest: importStorageDir(),
   limits: { fileSize: 30 * 1024 * 1024 }
 });
+const productSearchCache = new Map();
+const PRODUCT_SEARCH_CACHE_TTL_MS = 60 * 1000;
+const PRODUCT_SEARCH_CACHE_MAX = 300;
+
+function clearProductSearchCache() {
+  productSearchCache.clear();
+}
+
+function productSearchCacheKey(search, limit) {
+  return `${String(search || '').trim().replace(/\s+/g, ' ').toLowerCase()}::${limit}`;
+}
+
+function getCachedProductSearch(search, limit) {
+  const key = productSearchCacheKey(search, limit);
+  const cached = productSearchCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    productSearchCache.delete(key);
+    return null;
+  }
+  return cached.rows;
+}
+
+function setCachedProductSearch(search, limit, rows) {
+  if (productSearchCache.size >= PRODUCT_SEARCH_CACHE_MAX) {
+    const oldestKey = productSearchCache.keys().next().value;
+    if (oldestKey) productSearchCache.delete(oldestKey);
+  }
+  productSearchCache.set(productSearchCacheKey(search, limit), {
+    rows,
+    expiresAt: Date.now() + PRODUCT_SEARCH_CACHE_TTL_MS
+  });
+}
 
 webApi.post('/auth/login', asyncHandler(async (req, res) => {
   const usuario = String(req.body.usuario || '').trim();
@@ -261,6 +294,7 @@ webApi.post('/productos', requireWebUser, requirePermission('admin'), asyncHandl
      RETURNING *`,
     [codigo, descripcion]
   );
+  clearProductSearchCache();
   res.status(201).json({ ok: true, producto: rows[0] });
 }));
 
@@ -269,6 +303,7 @@ webApi.post('/productos/import', requireWebUser, requirePermission('admin'), upl
     throw new AppError('Seleccione un archivo valido', 422);
   }
   const summary = await importProductsFromFile(req.file, req.user.id);
+  clearProductSearchCache();
   res.status(201).json({ ok: true, importacion: summary });
 }));
 
@@ -285,6 +320,7 @@ webApi.patch('/productos/:id', requireWebUser, requirePermission('admin'), async
   if (!rows[0]) {
     throw new AppError('Producto no encontrado', 404);
   }
+  clearProductSearchCache();
   res.json({ ok: true, producto: rows[0] });
 }));
 
@@ -293,6 +329,7 @@ webApi.delete('/productos/:id', requireWebUser, requirePermission('admin'), asyn
   if (!rows[0]) {
     throw new AppError('Producto no encontrado', 404);
   }
+  clearProductSearchCache();
   res.json({ ok: true, id: Number(rows[0].id), message: 'Producto eliminado correctamente' });
 }));
 
@@ -751,6 +788,12 @@ async function searchActiveProducts(search, limit = 30, options = {}) {
   const select = options.includeMeta
     ? 'id, codigo, descripcion, estado, fecha_creacion'
     : 'id, codigo, descripcion';
+  const canUseCache = !options.includeMeta && !options.includeEmpty;
+
+  if (canUseCache) {
+    const cached = getCachedProductSearch(q, safeLimit);
+    if (cached) return cached;
+  }
 
   if (!q) {
     if (!options.includeEmpty) return [];
@@ -778,6 +821,7 @@ async function searchActiveProducts(search, limit = 30, options = {}) {
       [q]
     );
     if (exact.rows.length) {
+      if (canUseCache) setCachedProductSearch(q, safeLimit, exact.rows);
       return exact.rows;
     }
 
@@ -797,6 +841,7 @@ async function searchActiveProducts(search, limit = 30, options = {}) {
        LIMIT $4`,
       [codePrefix, contains, q, safeLimit]
     );
+    if (canUseCache) setCachedProductSearch(q, safeLimit, rows);
     return rows;
   }
 
@@ -814,9 +859,10 @@ async function searchActiveProducts(search, limit = 30, options = {}) {
        similarity(descripcion, $3) DESC,
        descripcion,
        codigo
-     LIMIT $4`,
+    LIMIT $4`,
     [codePrefix, contains, q, safeLimit]
   );
+  if (canUseCache) setCachedProductSearch(q, safeLimit, rows);
   return rows;
 }
 
