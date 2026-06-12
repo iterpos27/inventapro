@@ -196,31 +196,22 @@ h1 {
 }
 
 .account-trigger {
-  min-width: 164px;
-  display: flex;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
   align-items: center;
-  gap: 9px;
   border: 1px solid #c9ddf2;
   border-radius: 6px;
   background: #ffffff;
   color: #1c4f82;
-  padding: 9px 10px;
-  text-align: left;
+  padding: 0;
 }
 
-.account-trigger span {
-  display: grid;
-  line-height: 1.05;
-}
-
-.account-trigger strong {
-  color: #0f4275;
-  font-size: 14px;
-}
-
-.account-trigger small {
-  color: #173b63;
-  font-weight: 800;
+.account-trigger:hover {
+  border-color: #2563a7;
+  background: #f8fbff;
 }
 
 .account-popover {

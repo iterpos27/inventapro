@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Menu, UserCircle, ChevronDown, LogOut } from 'lucide-react';
+import { Menu, UserCircle, LogOut } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { api } from './services/api';
 import { navForUser } from './constants/navigation';
@@ -78,13 +78,13 @@ export default function App() {
             <h1>{route === 'dashboard' ? 'Panel' : navItems.find((item) => item.id === route)?.label}</h1>
           </div>
           <div className="account-menu">
-            <button className="account-trigger" onClick={() => setAccountOpen((value) => !value)}>
+            <button
+              className="account-trigger"
+              onClick={() => setAccountOpen((value) => !value)}
+              aria-label="Abrir menu de usuario"
+              title={user?.nombre || 'Usuario'}
+            >
               <UserCircle size={22} />
-              <span>
-                <strong>{user?.nombre || 'Administrador'}</strong>
-                <small>{roleLabel(user?.rol)}</small>
-              </span>
-              <ChevronDown size={16} />
             </button>
             {accountOpen ? (
               <div className="account-popover">
