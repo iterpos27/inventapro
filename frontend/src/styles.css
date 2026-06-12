@@ -1361,6 +1361,15 @@ th {
   font-size: 12px;
 }
 
+.inline-alert {
+  border: 1px solid #f3d27c;
+  border-radius: 4px;
+  background: #fff3cd;
+  color: #6b4d00;
+  padding: 12px;
+  font-size: 12px;
+}
+
 .toma-metrics-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

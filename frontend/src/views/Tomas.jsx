@@ -612,7 +612,7 @@ export function TomaForm({ form, setForm, users, agencias = [], onSubmit, submit
   );
 }
 
-function defaultTomaForm() {
+export function defaultTomaForm() {
   return {
     agencia: '',
     fecha_habilitacion: '',
