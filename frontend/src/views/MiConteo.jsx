@@ -16,7 +16,7 @@ import { FeedbackToast } from '../components/FeedbackToast';
 const SEARCH_CACHE_KEY = 'conteo_recent_searches_v1';
 const SEARCH_CACHE_LIMIT = 100;
 const MAX_VISIBLE_ITEMS = 50;
-const AUTO_SAVE_DELAY = 4500;
+const AUTO_SAVE_DELAY = 180000;
 
 function readSearchCache() {
   try {
@@ -64,6 +64,13 @@ function tomaPeriodLabel(toma, field) {
   return formatDateTime(toma.fecha_cierre) || [toma.fecha_cierre, toma.hora_fin].filter(Boolean).join(' ');
 }
 
+function tomaTitle(numeroToma) {
+  const value = String(numeroToma || '').trim();
+  if (!value) return 'TOMA FISICA #';
+  if (/^TOMA\s+FISICA\s+#/i.test(value)) return value.toUpperCase();
+  return `TOMA FISICA # ${value}`.toUpperCase();
+}
+
 function savedSnapshot(items) {
   return JSON.stringify(items
     .filter((item) => Number(item.cantidad) > 0)
@@ -78,6 +85,7 @@ export function MiConteo({ request }) {
   const [results, setResults] = useState([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [warning, setWarning] = useState('');
   const [highlightedId, setHighlightedId] = useState(null);
   const [saveStatus, setSaveStatus] = useState('Sin cambios recientes.');
   const [saving, setSaving] = useState(false);
@@ -141,6 +149,7 @@ export function MiConteo({ request }) {
   async function startToma(toma) {
     setError('');
     setMessage('');
+    setWarning('');
     try {
       const started = await request(`/mi/tomas/${toma.toma_id}/iniciar`, { method: 'POST', body: JSON.stringify({}) });
       await loadConteo(started.conteo_id);
@@ -223,7 +232,7 @@ export function MiConteo({ request }) {
     setItems((current) => {
       const existing = current.find((item) => Number(item.producto_id) === Number(product.id));
       if (existing) {
-        setMessage('Producto ya estaba agregado. Actualice la cantidad.');
+        setWarning('Producto ya estaba agregado. Actualice la cantidad.');
         return [existing, ...current.filter((item) => Number(item.producto_id) !== Number(product.id))];
       }
       return [{ producto_id: product.id, codigo: product.codigo, descripcion: product.descripcion, cantidad: '' }, ...current];
@@ -247,6 +256,7 @@ export function MiConteo({ request }) {
     if (!conteo || savingRef.current) return;
     setError('');
     if (!silent) setMessage('');
+    if (!silent) setWarning('');
     if (validItems.length === 0) {
       setError('Agregue productos validos al conteo');
       return;
@@ -303,7 +313,7 @@ export function MiConteo({ request }) {
                 onClick={() => toma.conteo_id ? loadConteo(toma.conteo_id) : startToma(toma)}
               >
                 <span className="available-count-body">
-                  <strong className="available-count-title">{toma.numero_toma}</strong>
+                  <strong className="available-count-title">{tomaTitle(toma.numero_toma)}</strong>
                   <span>AGENCIA: {toma.agencia || ''}</span>
                   <span>HABILITACION: {tomaPeriodLabel(toma, 'habilitacion')}</span>
                   <span>FINALIZACION: {tomaPeriodLabel(toma, 'cierre')}</span>
@@ -326,7 +336,7 @@ export function MiConteo({ request }) {
           <div className="operation-card-body">
             <div className="operation-info">
               <span className="operation-tag"><Circle size={10} fill="currentColor" /> OPERACION ACTIVA</span>
-              <strong className="operation-title">{conteo.numero_toma}</strong>
+              <strong className="operation-title">{tomaTitle(conteo.numero_toma)}</strong>
               <span className="save-status">{saveStatus}</span>
               <div className="operation-meta">
                 <span><Building2 size={14} /> Agencia: {conteo.agencia || ''}</span>
@@ -430,7 +440,7 @@ export function MiConteo({ request }) {
           </div>
         </div>
 
-        <FeedbackToast message={message} error={error} onClose={() => { setMessage(''); setError(''); }} />
+        <FeedbackToast message={message} error={error} warning={warning} onClose={() => { setMessage(''); setError(''); setWarning(''); }} />
       </section>
     </div>
   );

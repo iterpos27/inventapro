@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
-import { AlertTriangle, CheckCircle, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, X } from 'lucide-react';
 
-export function FeedbackToast({ message = '', error = '', onClose }) {
-  const text = error || message;
-  const type = error ? 'error' : 'success';
-  const Icon = error ? AlertTriangle : CheckCircle;
+export function FeedbackToast({ message = '', error = '', warning = '', onClose }) {
+  const text = error || warning || message;
+  const type = error ? 'error' : warning ? 'warning' : 'success';
+  const Icon = error ? AlertTriangle : warning ? Info : CheckCircle;
+  const title = error ? 'Error' : warning ? 'Advertencia' : 'Exito';
 
   useEffect(() => {
     if (!text) return undefined;
@@ -23,7 +24,7 @@ export function FeedbackToast({ message = '', error = '', onClose }) {
           <Icon size={20} />
         </span>
         <div className="toast-content">
-          <strong>{error ? 'Error' : 'Exito'}</strong>
+          <strong>{title}</strong>
           <p>{text}</p>
         </div>
         <button className="toast-close" type="button" onClick={onClose} aria-label="Cerrar notificacion">

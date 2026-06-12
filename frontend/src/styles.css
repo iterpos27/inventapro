@@ -1227,6 +1227,10 @@ th {
   background: #dc3545;
 }
 
+.toast-card.warning {
+  background: #d99a00;
+}
+
 .toast-icon {
   display: grid;
   place-items: center;
