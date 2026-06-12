@@ -668,19 +668,251 @@ function Usuarios({ request }) {
 
 function Tomas({ request, token }) {
   const [items, setItems] = useState([]);
-  useEffect(() => { request('/tomas').then((data) => setItems(data.tomas)); }, [request]);
+  const [users, setUsers] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [participants, setParticipants] = useState([]);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [form, setForm] = useState(defaultTomaForm());
+
+  const load = () => request('/tomas').then((data) => setItems(data.tomas));
+  const loadUsers = () => request('/usuarios').then((data) => setUsers(data.usuarios.filter((user) => ['usuario', 'operador'].includes(user.rol) && user.estado)));
+  useEffect(() => { load(); loadUsers(); }, []);
+
+  async function createToma(event) {
+    event.preventDefault();
+    setMessage('');
+    setError('');
+    try {
+      const data = await request('/tomas', { method: 'POST', body: JSON.stringify({ ...form, usuarios: form.usuarios.map(Number) }) });
+      setMessage(data.message || 'Toma creada');
+      setForm(defaultTomaForm());
+      await load();
+      await openDetail(data.toma.id);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function openDetail(id) {
+    setMessage('');
+    setError('');
+    const data = await request(`/tomas/${id}`);
+    setSelected(data.toma);
+    setParticipants(data.participantes);
+    setForm({
+      agencia: data.toma.agencia || '',
+      fecha_habilitacion: String(data.toma.fecha_habilitacion || data.toma.fecha_toma || '').slice(0, 10),
+      fecha_cierre: String(data.toma.fecha_cierre || '').slice(0, 10),
+      hora_inicio: String(data.toma.hora_inicio || '').slice(0, 5),
+      hora_fin: String(data.toma.hora_fin || '').slice(0, 5),
+      usuarios: []
+    });
+  }
+
+  async function updateToma(event) {
+    event.preventDefault();
+    if (!selected) return;
+    setMessage('');
+    setError('');
+    try {
+      const data = await request(`/tomas/${selected.id}`, { method: 'PATCH', body: JSON.stringify(form) });
+      setMessage(data.message || 'Toma actualizada');
+      await load();
+      await openDetail(selected.id);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function assignUsers() {
+    if (!selected) return;
+    setMessage('');
+    setError('');
+    try {
+      const data = await request(`/tomas/${selected.id}/asignaciones`, { method: 'POST', body: JSON.stringify({ usuarios: form.usuarios.map(Number) }) });
+      setMessage(data.message || 'Usuarios asignados');
+      setForm((current) => ({ ...current, usuarios: [] }));
+      await openDetail(selected.id);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function changeStatus(accion) {
+    if (!selected) return;
+    setMessage('');
+    setError('');
+    try {
+      const data = await request(`/tomas/${selected.id}/estado`, { method: 'POST', body: JSON.stringify({ accion }) });
+      setMessage(data.message);
+      await openDetail(selected.id);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function reuseToma() {
+    if (!selected) return;
+    setMessage('');
+    setError('');
+    try {
+      const data = await request(`/tomas/${selected.id}/reutilizar`, { method: 'POST', body: JSON.stringify(form) });
+      setMessage(data.message);
+      await load();
+      await openDetail(data.toma.id);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function enableUser(usuarioId) {
+    if (!selected) return;
+    const data = await request(`/tomas/${selected.id}/usuarios/${usuarioId}/habilitar`, { method: 'POST', body: JSON.stringify({}) });
+    setMessage(data.message);
+    await openDetail(selected.id);
+    await load();
+  }
+
+  async function deleteToma() {
+    if (!selected) return;
+    setMessage('');
+    setError('');
+    try {
+      await request(`/tomas/${selected.id}`, { method: 'DELETE' });
+      setSelected(null);
+      setParticipants([]);
+      setForm(defaultTomaForm());
+      setMessage('Toma eliminada correctamente');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function consolidado(toma) {
     await request(`/tomas/${toma.id}/consolidado`, { method: 'POST', body: JSON.stringify({}) });
     await downloadFile(token, `/tomas/${toma.id}/consolidado`);
   }
+
   return (
-    <Panel>
-      <DataTable
-        columns={['numero_toma', 'nombre_toma', 'agencia', 'estado', 'usuarios_asignados', 'usuarios_finalizados', 'acciones']}
-        rows={items.map((item) => ({ ...item, acciones: <button className="table-btn" onClick={() => consolidado(item)}>Consolidado</button> }))}
-      />
-    </Panel>
+    <div className="tomas-workspace">
+      <section className="panel">
+        <div className="section-title">
+          <h2>{selected ? `Toma ${selected.numero_toma}` : 'Crear toma fisica'}</h2>
+          {selected ? <button className="outline-action" onClick={() => { setSelected(null); setParticipants([]); setForm(defaultTomaForm()); }}>Nueva</button> : null}
+        </div>
+        <TomaForm form={form} setForm={setForm} users={users} onSubmit={selected ? updateToma : createToma} submitLabel={selected ? 'Guardar cambios' : 'Crear toma'} />
+        {selected ? (
+          <div className="action-grid">
+            <button className="secondary-action" onClick={assignUsers}>Asignar usuarios</button>
+            <button className="table-btn" onClick={() => changeStatus(selected.estado === 'abierta' ? 'cerrar' : 'reabrir')}>{selected.estado === 'abierta' ? 'Cerrar toma' : 'Reabrir toma'}</button>
+            <button className="outline-action" onClick={reuseToma}>Reutilizar toma</button>
+            <button className="outline-action" onClick={() => consolidado(selected)}>Consolidado</button>
+            <button className="danger-action" onClick={deleteToma}>Eliminar</button>
+          </div>
+        ) : null}
+        {message ? <p className="success">{message}</p> : null}
+        {error ? <p className="error">{error}</p> : null}
+      </section>
+
+      <section className="panel">
+        <div className="section-title">
+          <h2>Tomas fisicas</h2>
+        </div>
+        <div className="toma-list admin-list">
+          {items.map((item) => (
+            <article className={`toma-card ${selected?.id === item.id ? 'selected' : ''}`} key={item.id}>
+              <div>
+                <strong>{item.numero_toma} · {item.estado}</strong>
+                <span>{item.nombre_toma}</span>
+                <small>{item.agencia || 'Sin agencia'} · {item.usuarios_asignados} usuarios · {item.usuarios_finalizados} finalizados</small>
+              </div>
+              <button className="table-btn" onClick={() => openDetail(item.id)}>Detalle</button>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {selected ? (
+        <section className="panel tomas-detail">
+          <div className="section-title">
+            <div>
+              <h2>Participantes</h2>
+              <p>{selected.nombre_toma}</p>
+            </div>
+            <span className="version">{selected.estado}</span>
+          </div>
+          <DataTable
+            columns={['nombre', 'usuario', 'asignacion_estado', 'conteo_estado', 'acciones']}
+            rows={participants.map((participant) => ({
+              id: participant.usuario_id,
+              ...participant,
+              acciones: participant.conteo_estado === 'finalizado'
+                ? <button className="table-btn" onClick={() => enableUser(participant.usuario_id)}>Habilitar</button>
+                : '-'
+            }))}
+          />
+        </section>
+      ) : null}
+    </div>
   );
+}
+
+function TomaForm({ form, setForm, users, onSubmit, submitLabel }) {
+  function toggleUser(id) {
+    const value = String(id);
+    setForm((current) => ({
+      ...current,
+      usuarios: current.usuarios.includes(value)
+        ? current.usuarios.filter((userId) => userId !== value)
+        : [...current.usuarios, value]
+    }));
+  }
+
+  return (
+    <form className="toma-form" onSubmit={onSubmit}>
+      <input placeholder="Agencia" value={form.agencia} onChange={(e) => setForm({ ...form, agencia: e.target.value })} />
+      <label>
+        Habilitacion
+        <input type="date" value={form.fecha_habilitacion} onChange={(e) => setForm({ ...form, fecha_habilitacion: e.target.value })} />
+      </label>
+      <label>
+        Cierre
+        <input type="date" value={form.fecha_cierre} onChange={(e) => setForm({ ...form, fecha_cierre: e.target.value })} />
+      </label>
+      <label>
+        Hora inicio
+        <input type="time" value={form.hora_inicio} onChange={(e) => setForm({ ...form, hora_inicio: e.target.value })} />
+      </label>
+      <label>
+        Hora fin
+        <input type="time" value={form.hora_fin} onChange={(e) => setForm({ ...form, hora_fin: e.target.value })} />
+      </label>
+      <div className="user-picker">
+        {users.map((user) => (
+          <label key={user.id}>
+            <input type="checkbox" checked={form.usuarios.includes(String(user.id))} onChange={() => toggleUser(user.id)} />
+            {user.nombre}
+          </label>
+        ))}
+      </div>
+      <button className="primary">{submitLabel}</button>
+    </form>
+  );
+}
+
+function defaultTomaForm() {
+  return {
+    agencia: '',
+    fecha_habilitacion: '',
+    fecha_cierre: '',
+    hora_inicio: '',
+    hora_fin: '',
+    usuarios: []
+  };
 }
 
 function Conteos({ request, token }) {

@@ -419,9 +419,11 @@ h1 {
 }
 
 .outline-action,
-.link-action {
+.link-action,
+.danger-action {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   border-radius: 5px;
   padding: 10px 14px;
@@ -438,6 +440,12 @@ h1 {
   border: 0;
   background: transparent;
   color: #5b6776;
+}
+
+.danger-action {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b42318;
 }
 
 .latest-panel {
@@ -700,6 +708,65 @@ th {
   align-items: start;
 }
 
+.tomas-workspace {
+  display: grid;
+  grid-template-columns: minmax(320px, 430px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.tomas-detail {
+  grid-column: 1 / -1;
+}
+
+.toma-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.toma-form > input,
+.toma-form > button,
+.user-picker {
+  grid-column: 1 / -1;
+}
+
+.user-picker {
+  max-height: 190px;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f8fbff;
+}
+
+.user-picker label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #173b63;
+}
+
+.user-picker input {
+  width: auto;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.admin-list {
+  max-height: 620px;
+  overflow: auto;
+}
+
 .count-panel {
   min-height: 240px;
 }
@@ -903,6 +970,10 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .tomas-workspace {
+    grid-template-columns: 1fr;
+  }
+
   .count-items {
     max-height: none;
   }
@@ -991,5 +1062,10 @@ th {
 
   .count-actions {
     display: grid;
+  }
+
+  .toma-form,
+  .action-grid {
+    grid-template-columns: 1fr;
   }
 }

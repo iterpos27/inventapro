@@ -12,11 +12,10 @@ Estado de migracion funcional frente al PHP activo de `centro_ruliman_inventario
 - Tomas fisicas: listar, crear con numeracion anual, editar, eliminar si no tiene detalle, cerrar, reabrir, asignar usuarios, reutilizar toma, ver detalle.
 - Conteo web/web-movil: tomas asignadas, iniciar conteo, buscar productos, guardar borrador, finalizar.
 - Reportes Excel: detalle de conteo y consolidado por toma.
+- Frontend de tomas: crear, editar, eliminar, ver detalle, asignar usuarios, cerrar/reabrir, reutilizar, consolidado y habilitar conteo de usuario.
 
 ## Falta conectar o pulir en frontend
 
-- Formularios completos para crear/editar/eliminar tomas desde el panel.
-- Pantalla de detalle de toma con participantes, asignacion, cierre/reapertura, reutilizacion y habilitar conteo por usuario.
 - Edicion/desactivacion visual de productos, agencias y usuarios.
 - Pantalla de reportes con filtros por rango/estado y descarga de consolidado.
 - Configuracion del sistema para logo/branding.
