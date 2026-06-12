@@ -1226,47 +1226,59 @@ function Tomas({ request, token }) {
   }
 
   return (
-    <div className="tomas-workspace">
-      <section className="panel">
-        <div className="section-title">
-          <h2>{selected ? `Toma ${selected.numero_toma}` : 'Crear toma fisica'}</h2>
-          <div className="row-actions">
-            <IconAction label={selected ? 'Editar toma' : 'Crear toma'} icon={selected ? Edit3 : Plus} variant="primary" onClick={() => setModalOpen(true)} />
-            {selected ? <IconAction label="Nueva toma" icon={Plus} variant="outline" onClick={() => { setSelected(null); setParticipants([]); setForm(defaultTomaForm()); setModalOpen(true); }} /> : null}
-          </div>
+    <div className="users-page tomas-page">
+      <div className="admin-page-heading">
+        <div>
+          <p>CONTEO FISICO</p>
+          <h2>Crear toma fisica</h2>
         </div>
-        {selected ? (
-          <div className="action-grid">
-            <IconAction label="Asignar usuarios" icon={UserPlus} variant="success" onClick={assignUsers} />
-            <IconAction label={selected.estado === 'abierta' ? 'Cerrar toma' : 'Reabrir toma'} icon={Power} variant="primary" onClick={() => changeStatus(selected.estado === 'abierta' ? 'cerrar' : 'reabrir')} />
-            <IconAction label="Reutilizar toma" icon={RefreshCcw} variant="outline" onClick={reuseToma} />
-            <IconAction label="Consolidado" icon={Download} variant="outline" onClick={() => consolidado(selected)} />
-            <IconAction label="Eliminar toma" icon={Trash2} variant="danger" onClick={deleteToma} />
-          </div>
-        ) : null}
-        <FeedbackToast message={message} error={error} onClose={() => { setMessage(''); setError(''); }} />
-        {modalOpen ? (
-          <Modal title={selected ? 'Editar toma' : 'Crear toma fisica'} onClose={() => setModalOpen(false)}>
-            <TomaForm form={form} setForm={setForm} users={users} onSubmit={selected ? updateToma : createToma} submitLabel={selected ? 'Guardar cambios' : 'Crear toma'} />
-          </Modal>
-        ) : null}
+      </div>
+      <FeedbackToast message={message} error={error} onClose={() => { setMessage(''); setError(''); }} />
+
+      <section className="panel toma-create-panel">
+        <h3>Crear toma fisica</h3>
+        <TomaForm form={form} setForm={setForm} users={users} onSubmit={createToma} submitLabel="Crear toma fisica" mode="inline" />
       </section>
 
-      <section className="panel">
-        <div className="section-title">
-          <h2>Tomas fisicas</h2>
-        </div>
-        <div className="toma-list admin-list">
-          {items.map((item) => (
-            <article className={`toma-card ${selected?.id === item.id ? 'selected' : ''}`} key={item.id}>
-              <div>
-                <strong>{item.numero_toma} · {item.estado}</strong>
-                <span>{item.nombre_toma}</span>
-                <small>{item.agencia || 'Sin agencia'} · {item.usuarios_asignados} usuarios · {item.usuarios_finalizados} finalizados</small>
-              </div>
-              <IconAction label="Ver detalle" icon={Eye} variant="primary" onClick={() => openDetail(item.id)} />
-            </article>
-          ))}
+      <section className="panel users-card toma-table-card">
+        <h3>Tomas abiertas</h3>
+        <div className="table-wrap">
+          <table className="admin-table users-table tomas-table">
+            <thead>
+              <tr>
+                <th>Toma fisica</th>
+                <th>Asignados</th>
+                <th>En proceso</th>
+                <th>Finalizados</th>
+                <th>Periodo</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} className={selected?.id === item.id ? 'selected-row' : ''}>
+                  <td>
+                    <strong>TOMA FISICA # {item.numero_toma}</strong>
+                    <span>AGENCIA: {item.agencia || ''}</span>
+                    <span>HABILITACION: {formatPeriodDate(item.fecha_habilitacion, item.hora_inicio)}</span>
+                    <span>FINALIZACION: {formatPeriodDate(item.fecha_cierre, item.hora_fin)}</span>
+                  </td>
+                  <td>{item.usuarios_asignados || 0}</td>
+                  <td>{Math.max(Number(item.usuarios_asignados || 0) - Number(item.usuarios_finalizados || 0), 0)}</td>
+                  <td>{item.usuarios_finalizados || 0}</td>
+                  <td>{formatShortPeriod(item)}</td>
+                  <td>
+                    <button className="outline-action compact" type="button" onClick={() => openDetail(item.id)}>Ver detalle</button>
+                  </td>
+                </tr>
+              ))}
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan="6">No hay tomas registradas.</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -1278,6 +1290,14 @@ function Tomas({ request, token }) {
               <p>{selected.nombre_toma}</p>
             </div>
             <span className="version">{selected.estado}</span>
+          </div>
+          <div className="action-grid toma-detail-actions">
+            <IconAction label="Editar toma" icon={Edit3} variant="primary" onClick={() => setModalOpen(true)} />
+            <IconAction label="Asignar usuarios" icon={UserPlus} variant="success" onClick={assignUsers} />
+            <IconAction label={selected.estado === 'abierta' ? 'Cerrar toma' : 'Reabrir toma'} icon={Power} variant="primary" onClick={() => changeStatus(selected.estado === 'abierta' ? 'cerrar' : 'reabrir')} />
+            <IconAction label="Reutilizar toma" icon={RefreshCcw} variant="outline" onClick={reuseToma} />
+            <IconAction label="Consolidado" icon={Download} variant="outline" onClick={() => consolidado(selected)} />
+            <IconAction label="Eliminar toma" icon={Trash2} variant="danger" onClick={deleteToma} />
           </div>
           <DataTable
             columns={['nombre', 'usuario', 'asignacion_estado', 'conteo_estado', 'acciones']}
@@ -1291,11 +1311,16 @@ function Tomas({ request, token }) {
           />
         </section>
       ) : null}
+      {modalOpen ? (
+        <Modal title="Editar toma" onClose={() => setModalOpen(false)}>
+          <TomaForm form={form} setForm={setForm} users={users} onSubmit={updateToma} submitLabel="Guardar cambios" />
+        </Modal>
+      ) : null}
     </div>
   );
 }
 
-function TomaForm({ form, setForm, users, onSubmit, submitLabel }) {
+function TomaForm({ form, setForm, users, onSubmit, submitLabel, mode = 'modal' }) {
   function toggleUser(id) {
     const value = String(id);
     setForm((current) => ({
@@ -1305,35 +1330,90 @@ function TomaForm({ form, setForm, users, onSubmit, submitLabel }) {
         : [...current.usuarios, value]
     }));
   }
+  function selectAllUsers() {
+    setForm((current) => ({ ...current, usuarios: users.map((user) => String(user.id)) }));
+  }
+  function clearUsers() {
+    setForm((current) => ({ ...current, usuarios: [] }));
+  }
+  function updateDateTime(field, value) {
+    const [date = '', time = ''] = value.split('T');
+    setForm((current) => field === 'start'
+      ? { ...current, fecha_habilitacion: date, hora_inicio: time }
+      : { ...current, fecha_cierre: date, hora_fin: time });
+  }
+  const inline = mode === 'inline';
 
   return (
-    <form className="toma-form" onSubmit={onSubmit}>
-      <input placeholder="Agencia" value={form.agencia} onChange={(e) => setForm({ ...form, agencia: e.target.value })} />
+    <form className={`toma-form ${inline ? 'inline-toma-form' : ''}`} onSubmit={onSubmit}>
+      {inline ? (
+        <label>
+          Toma fisica #
+          <input value={previewTomaNumber(form.fecha_habilitacion)} readOnly />
+        </label>
+      ) : null}
+      <label>
+        Agencia
+        <input placeholder="Sin agencia" value={form.agencia} onChange={(e) => setForm({ ...form, agencia: e.target.value })} />
+      </label>
       <label>
         Habilitacion
-        <input type="date" value={form.fecha_habilitacion} onChange={(e) => setForm({ ...form, fecha_habilitacion: e.target.value })} />
+        <input
+          type={inline ? 'datetime-local' : 'date'}
+          value={inline ? composeDateTime(form.fecha_habilitacion, form.hora_inicio) : form.fecha_habilitacion}
+          onChange={(e) => inline ? updateDateTime('start', e.target.value) : setForm({ ...form, fecha_habilitacion: e.target.value })}
+        />
       </label>
       <label>
-        Cierre
-        <input type="date" value={form.fecha_cierre} onChange={(e) => setForm({ ...form, fecha_cierre: e.target.value })} />
+        Finalizacion
+        <input
+          type={inline ? 'datetime-local' : 'date'}
+          value={inline ? composeDateTime(form.fecha_cierre, form.hora_fin) : form.fecha_cierre}
+          onChange={(e) => inline ? updateDateTime('end', e.target.value) : setForm({ ...form, fecha_cierre: e.target.value })}
+        />
       </label>
-      <label>
-        Hora inicio
-        <input type="time" value={form.hora_inicio} onChange={(e) => setForm({ ...form, hora_inicio: e.target.value })} />
-      </label>
-      <label>
-        Hora fin
-        <input type="time" value={form.hora_fin} onChange={(e) => setForm({ ...form, hora_fin: e.target.value })} />
-      </label>
-      <div className="user-picker">
+      {!inline ? (
+        <>
+          <label>
+            Hora inicio
+            <input type="time" value={form.hora_inicio} onChange={(e) => setForm({ ...form, hora_inicio: e.target.value })} />
+          </label>
+          <label>
+            Hora fin
+            <input type="time" value={form.hora_fin} onChange={(e) => setForm({ ...form, hora_fin: e.target.value })} />
+          </label>
+        </>
+      ) : null}
+      {inline ? (
+        <div className="toma-preview">
+          <strong>TOMA FISICA # {previewTomaNumber(form.fecha_habilitacion)}</strong>
+          <span>AGENCIA: {form.agencia || ''}</span>
+          <span>HABILITACION: {formatPeriodDate(form.fecha_habilitacion, form.hora_inicio)}</span>
+          <span>FINALIZACION: {formatPeriodDate(form.fecha_cierre, form.hora_fin)}</span>
+        </div>
+      ) : null}
+      <div className="user-picker-heading">
+        <strong>Usuarios participantes</strong>
+        <span>
+          <button className="outline-action compact" type="button" onClick={selectAllUsers}>Todos</button>
+          <button className="link-action compact" type="button" onClick={clearUsers}>Ninguno</button>
+        </span>
+      </div>
+      <div className={`user-picker ${inline ? 'wide' : ''}`}>
         {users.map((user) => (
           <label key={user.id}>
             <input type="checkbox" checked={form.usuarios.includes(String(user.id))} onChange={() => toggleUser(user.id)} />
-            {user.nombre}
+            <span>
+              <strong>{user.nombre}</strong>
+              <small>{user.usuario}</small>
+            </span>
           </label>
         ))}
       </div>
-      <IconAction label={submitLabel} icon={Save} variant="primary" type="submit" />
+      <button className="primary toma-submit" type="submit">
+        <Plus size={16} />
+        {submitLabel}
+      </button>
     </form>
   );
 }
@@ -1413,6 +1493,36 @@ function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleString('sv-SE').replace('T', ' ').slice(0, 19);
+}
+
+function composeDateTime(date, time) {
+  if (!date && !time) return '';
+  return `${date || ''}T${time || ''}`;
+}
+
+function previewTomaNumber(date) {
+  const year = String(date || new Date().getFullYear()).slice(0, 4);
+  return `${year}-000`;
+}
+
+function formatPeriodDate(date, time) {
+  if (!date && !time) return '';
+  const dateOnly = String(date || '1970-01-01').slice(0, 10);
+  const timeOnly = String(time || '00:00').slice(0, 5);
+  const parsed = new Date(`${dateOnly}T${timeOnly}`);
+  if (Number.isNaN(parsed.getTime())) return `${dateOnly || ''} ${timeOnly || ''}`.trim();
+  const days = ['DOMINGO', 'LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO'];
+  const dayName = days[parsed.getDay()];
+  const dd = String(parsed.getDate()).padStart(2, '0');
+  const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+  const yyyy = parsed.getFullYear();
+  return `${dayName} ${dd}/${mm}/${yyyy} ${timeOnly || ''}`.trim();
+}
+
+function formatShortPeriod(toma) {
+  const start = `${String(toma.fecha_habilitacion || '').slice(0, 10)} ${String(toma.hora_inicio || '').slice(0, 5)}`.trim();
+  const end = `${String(toma.fecha_cierre || '').slice(0, 10)} ${String(toma.hora_fin || '').slice(0, 5)}`.trim();
+  return `${start} / ${end}`;
 }
 
 createRoot(document.getElementById('root')).render(<App />);
