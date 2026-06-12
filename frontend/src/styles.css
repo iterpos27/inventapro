@@ -2853,4 +2853,32 @@ th {
   .user-conteo-active .operation-meta {
     display: grid;
   }
+
+  .user-conteo-active {
+    padding-bottom: 80px;
+  }
+
+  .user-conteo-active .operation-actions .draft-save-action {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    width: 100%;
+    min-height: 56px;
+    margin: 0;
+    border: 0;
+    border-top: 1px solid #c9ddf2;
+    border-radius: 0;
+    background: #ffffff;
+    color: #003a70;
+    box-shadow: 0 -4px 12px rgba(23, 71, 125, 0.08);
+    font-size: 0.92rem;
+    justify-content: center;
+  }
+
+  .user-conteo-active .operation-actions .draft-save-action:hover {
+    background: #f4f8fd;
+    transform: none;
+  }
 }

@@ -349,7 +349,7 @@ export function MiConteo({ request }) {
               </div>
             </div>
             <div className="operation-actions">
-              <button className="secondary-action" onClick={() => save(false)} disabled={saving || validItems.length === 0}>
+              <button className="secondary-action draft-save-action" onClick={() => save(false)} disabled={saving || validItems.length === 0}>
                 <Save size={18} />
                 Guardar borrador
               </button>
