@@ -66,12 +66,12 @@ async function downloadFile(token, path) {
 
 const nav = [
   { id: 'dashboard', label: 'Dashboard', icon: Gauge, group: 'main' },
-  { id: 'mi_conteo', label: 'Nuevo conteo', icon: ClipboardList, group: 'Conteo y Borradores', permissions: ['count'] },
-  { id: 'conteos', label: 'Reportes generales', icon: FileText, group: 'Reportes' },
+  { id: 'mi_conteo', label: 'Conteo y Borradores', icon: ClipboardList, group: 'main', permissions: ['count'] },
+  { id: 'conteos', label: 'Reportes', icon: FileText, group: 'main' },
   { id: 'productos', label: 'Productos', icon: Boxes, group: 'main' },
-  { id: 'usuarios', label: 'Usuarios', icon: Users, group: 'Administracion' },
+  { id: 'usuarios', label: 'Administracion', icon: Settings, group: 'main' },
   { id: 'agencias', label: 'Agencias', icon: Building2, group: 'Administracion' },
-  { id: 'tomas', label: 'Configuracion del sistema', icon: Settings, group: 'Administracion' }
+  { id: 'tomas', label: 'Configuracion del sistema', icon: ClipboardCheck, group: 'Administracion' }
 ];
 
 function App() {
@@ -183,7 +183,7 @@ function Sidebar({ items, route, setRoute, open, setOpen }) {
         <div className="brand">
           <div className="brand-mark">CR</div>
           <div>
-            <strong>CENTRO DEL RULIMAN</strong>
+            <strong>InventaPro</strong>
             <span>SISTEMA DE INVENTARIO</span>
           </div>
           <button className="icon-btn close mobile-only" onClick={() => setOpen(false)} aria-label="Cerrar menu">
@@ -191,15 +191,22 @@ function Sidebar({ items, route, setRoute, open, setOpen }) {
           </button>
         </div>
         <nav className="side-nav">
-          {grouped.map((group) => (
-            <div className={group.name === 'main' ? 'nav-block plain' : 'nav-block'} key={group.name}>
-              {group.name !== 'main' ? <div className="nav-heading">{group.name}<ChevronDown size={15} /></div> : null}
-              {group.items.map((item) => {
+          {grouped.map((group) => {
+            const visibleItems = group.name === 'Administracion'
+              ? group.items.filter((item) => item.id !== 'agencias' && item.id !== 'tomas')
+              : group.items;
+            const childItems = group.name === 'Administracion'
+              ? group.items.filter((item) => item.id === 'agencias' || item.id === 'tomas')
+              : [];
+            const groupActive = group.items.some((item) => item.id === route);
+            return (
+              <div className="nav-block plain" key={group.name}>
+                {visibleItems.map((item) => {
                 const Icon = item.icon;
                 return (
                   <button
                     key={item.id}
-                    className={route === item.id ? 'active' : ''}
+                    className={route === item.id || (item.id === 'usuarios' && groupActive) ? 'active' : ''}
                     onClick={() => {
                       setRoute(item.id);
                       setOpen(false);
@@ -207,11 +214,29 @@ function Sidebar({ items, route, setRoute, open, setOpen }) {
                   >
                     <Icon size={18} />
                     {item.label}
+                    {item.id === 'usuarios' ? <ChevronDown className="nav-chevron" size={15} /> : null}
                   </button>
                 );
-              })}
-            </div>
-          ))}
+                })}
+                {group.name === 'Administracion' && groupActive ? (
+                  <div className="nav-children">
+                    {childItems.map((item) => (
+                      <button
+                        key={item.id}
+                        className={route === item.id ? 'active' : ''}
+                        onClick={() => {
+                          setRoute(item.id);
+                          setOpen(false);
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </nav>
       </aside>
       {open ? <button className="backdrop mobile-only" onClick={() => setOpen(false)} aria-label="Cerrar menu" /> : null}
@@ -220,7 +245,7 @@ function Sidebar({ items, route, setRoute, open, setOpen }) {
 }
 
 function groupNav(items) {
-  const order = ['main', 'Conteo y Borradores', 'Reportes', 'Administracion'];
+  const order = ['main', 'Administracion'];
   return order
     .map((name) => ({ name, items: items.filter((item) => (item.group || 'main') === name) }))
     .filter((group) => group.items.length > 0);
