@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
 CREATE TABLE IF NOT EXISTS productos (
   id BIGSERIAL PRIMARY KEY,
   codigo VARCHAR(80) NOT NULL UNIQUE,
-  descripcion VARCHAR(1000) NOT NULL,
+  descripcion TEXT NOT NULL,
   estado BOOLEAN NOT NULL DEFAULT TRUE,
   fecha_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS conteo_detalle (
   conteo_id BIGINT NOT NULL REFERENCES conteos(id) ON DELETE CASCADE,
   producto_id BIGINT NOT NULL REFERENCES productos(id),
   codigo VARCHAR(80) NOT NULL,
-  descripcion VARCHAR(1000) NOT NULL,
+  descripcion TEXT NOT NULL,
   cantidad NUMERIC(12, 2) NOT NULL DEFAULT 0,
   fecha_registro TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (conteo_id, producto_id)
@@ -194,4 +194,3 @@ CREATE TABLE IF NOT EXISTS import_jobs (
   actualizado_en TIMESTAMPTZ,
   finalizado_en TIMESTAMPTZ
 );
-
