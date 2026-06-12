@@ -1638,8 +1638,16 @@ th {
   }
 
   .account-trigger {
+    min-width: 40px;
+    width: 40px;
     min-height: 38px;
-    padding: 7px 10px;
+    padding: 7px;
+    justify-content: center;
+  }
+
+  .account-trigger span,
+  .account-trigger .nav-chevron {
+    display: none;
   }
 
   .dashboard-view h2 {
@@ -1764,10 +1772,6 @@ th {
   .icon-btn {
     width: 36px;
     height: 36px;
-  }
-
-  .account span {
-    display: none;
   }
 
   .account-trigger {
