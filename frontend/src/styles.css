@@ -680,7 +680,8 @@ h1 {
 }
 
 .status-badge.inactive {
-  background: #667085;
+  background: #f2b705;
+  color: #111827;
 }
 
 .text-actions {

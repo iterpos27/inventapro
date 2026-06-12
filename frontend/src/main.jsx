@@ -1123,10 +1123,12 @@ function Usuarios({ request }) {
                         <Edit3 size={15} />
                         Editar
                       </button>
-                      <button className="delete-text-btn" type="button" onClick={() => setDeleteTarget(item)}>
-                        <Trash2 size={15} />
-                        Eliminar
-                      </button>
+                      {item.rol !== 'admin' ? (
+                        <button className="delete-text-btn" type="button" onClick={() => setDeleteTarget(item)}>
+                          <Trash2 size={15} />
+                          Eliminar
+                        </button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>

@@ -360,6 +360,13 @@ webApi.patch('/usuarios/:id', requireWebUser, requirePermission('admin'), asyncH
 }));
 
 webApi.delete('/usuarios/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const current = await pool.query('SELECT id, rol FROM usuarios WHERE id = $1 LIMIT 1', [req.params.id]);
+  if (!current.rows[0]) {
+    throw new AppError('Usuario no encontrado', 404);
+  }
+  if (current.rows[0].rol === 'admin') {
+    throw new AppError('El administrador no se puede eliminar', 422);
+  }
   const { rows } = await pool.query('UPDATE usuarios SET estado = FALSE WHERE id = $1 RETURNING id', [req.params.id]);
   if (!rows[0]) {
     throw new AppError('Usuario no encontrado', 404);
