@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
+  AlertTriangle,
   Boxes,
   Building2,
   CheckCircle,
@@ -294,7 +295,7 @@ function Login({ onLogin }) {
           Contrasena
           <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
         </label>
-        {error ? <p className="error">{error}</p> : null}
+        <FeedbackToast error={error} onClose={() => setError('')} />
         <button className="primary" disabled={loading}>{loading ? 'Ingresando...' : 'Ingresar'}</button>
       </form>
       <footer className="login-footer">
@@ -465,8 +466,7 @@ function MiConteo({ request }) {
               {items.length === 0 ? <p className="muted">Agrega productos para guardar el conteo.</p> : null}
             </div>
 
-            {message ? <p className="success">{message}</p> : null}
-            {error ? <p className="error">{error}</p> : null}
+            <FeedbackToast message={message} error={error} onClose={() => { setMessage(''); setError(''); }} />
 
             <div className="count-actions">
               <button className="secondary-action" onClick={() => save(false)} disabled={items.length === 0}>
@@ -585,6 +585,39 @@ function IconAction({ label, icon: Icon, variant = 'plain', onClick, type = 'but
   );
 }
 
+function FeedbackToast({ message = '', error = '', onClose }) {
+  const text = error || message;
+  const type = error ? 'error' : 'success';
+  const Icon = error ? AlertTriangle : CheckCircle;
+
+  useEffect(() => {
+    if (!text) return undefined;
+    const timer = window.setTimeout(() => {
+      onClose?.();
+    }, 4200);
+    return () => window.clearTimeout(timer);
+  }, [text, onClose]);
+
+  if (!text) return null;
+
+  return (
+    <div className="toast-stack" aria-live="polite" aria-atomic="true">
+      <article className={`toast-card ${type}`}>
+        <span className="toast-icon">
+          <Icon size={20} />
+        </span>
+        <div className="toast-content">
+          <strong>{error ? 'Error' : 'Exito'}</strong>
+          <p>{text}</p>
+        </div>
+        <button className="toast-close" type="button" onClick={onClose} aria-label="Cerrar notificacion">
+          <X size={16} />
+        </button>
+      </article>
+    </div>
+  );
+}
+
 function Modal({ title, children, onClose, size = 'md' }) {
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -689,8 +722,7 @@ function Productos({ request }) {
         </label>
         {importMessage ? <span>{importMessage}</span> : null}
       </div>
-      {message ? <p className="success">{message}</p> : null}
-      {error ? <p className="error">{error}</p> : null}
+      <FeedbackToast message={message} error={error} onClose={() => { setMessage(''); setError(''); }} />
       <DataTable
         columns={['codigo', 'descripcion', 'estado', 'acciones']}
         rows={items.map((item) => ({
@@ -792,8 +824,7 @@ function Agencias({ request }) {
           Crear agencia
         </button>
       </div>
-      {message ? <p className="success">{message}</p> : null}
-      {error ? <p className="error">{error}</p> : null}
+      <FeedbackToast message={message} error={error} onClose={() => { setMessage(''); setError(''); }} />
       <section className="panel users-card">
         <h3>Agencias registradas</h3>
         <div className="table-wrap">
@@ -946,8 +977,7 @@ function Usuarios({ request }) {
           Crear usuario
         </button>
       </div>
-      {message ? <p className="success">{message}</p> : null}
-      {error ? <p className="error">{error}</p> : null}
+      <FeedbackToast message={message} error={error} onClose={() => { setMessage(''); setError(''); }} />
       <section className="panel users-card">
         <h3>Usuarios registrados</h3>
         <div className="table-wrap">
@@ -1214,8 +1244,7 @@ function Tomas({ request, token }) {
             <IconAction label="Eliminar toma" icon={Trash2} variant="danger" onClick={deleteToma} />
           </div>
         ) : null}
-        {message ? <p className="success">{message}</p> : null}
-        {error ? <p className="error">{error}</p> : null}
+        <FeedbackToast message={message} error={error} onClose={() => { setMessage(''); setError(''); }} />
         {modalOpen ? (
           <Modal title={selected ? 'Editar toma' : 'Crear toma fisica'} onClose={() => setModalOpen(false)}>
             <TomaForm form={form} setForm={setForm} users={users} onSubmit={selected ? updateToma : createToma} submitLabel={selected ? 'Guardar cambios' : 'Crear toma'} />
