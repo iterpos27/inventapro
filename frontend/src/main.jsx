@@ -69,7 +69,7 @@ const nav = [
   { id: 'mi_conteo', label: 'Conteo y Borradores', icon: ClipboardList, group: 'main', permissions: ['count'] },
   { id: 'conteos', label: 'Reportes', icon: FileText, group: 'main' },
   { id: 'productos', label: 'Productos', icon: Boxes, group: 'main' },
-  { id: 'usuarios', label: 'Administracion', icon: Settings, group: 'main' },
+  { id: 'usuarios', label: 'Usuarios', icon: Users, group: 'Administracion' },
   { id: 'agencias', label: 'Agencias', icon: Building2, group: 'Administracion' },
   { id: 'tomas', label: 'Configuracion del sistema', icon: ClipboardCheck, group: 'Administracion' }
 ];
@@ -192,13 +192,13 @@ function Sidebar({ items, route, setRoute, open, setOpen }) {
         </div>
         <nav className="side-nav">
           {grouped.map((group) => {
+            const groupActive = group.items.some((item) => item.id === route);
             const visibleItems = group.name === 'Administracion'
-              ? group.items.filter((item) => item.id !== 'agencias' && item.id !== 'tomas')
+              ? [{ id: 'administracion', label: 'Administracion', icon: Settings }]
               : group.items;
             const childItems = group.name === 'Administracion'
-              ? group.items.filter((item) => item.id === 'agencias' || item.id === 'tomas')
+              ? group.items
               : [];
-            const groupActive = group.items.some((item) => item.id === route);
             return (
               <div className="nav-block plain" key={group.name}>
                 {visibleItems.map((item) => {
@@ -206,15 +206,15 @@ function Sidebar({ items, route, setRoute, open, setOpen }) {
                 return (
                   <button
                     key={item.id}
-                    className={route === item.id || (item.id === 'usuarios' && groupActive) ? 'active' : ''}
+                    className={route === item.id || (item.id === 'administracion' && groupActive) ? 'active' : ''}
                     onClick={() => {
-                      setRoute(item.id);
+                      setRoute(item.id === 'administracion' ? 'usuarios' : item.id);
                       setOpen(false);
                     }}
                   >
                     <Icon size={18} />
                     {item.label}
-                    {item.id === 'usuarios' ? <ChevronDown className="nav-chevron" size={15} /> : null}
+                    {item.id === 'administracion' ? <ChevronDown className="nav-chevron" size={15} /> : null}
                   </button>
                 );
                 })}
