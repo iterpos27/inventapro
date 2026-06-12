@@ -664,13 +664,22 @@ function Productos({ request }) {
   async function importFile(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-    const body = new FormData();
-    body.append('archivo', file);
-    const data = await request('/productos/import', { method: 'POST', body });
-    const info = data.importacion;
-    setImportMessage(`Importados ${info.procesados}: ${info.insertados} nuevos, ${info.actualizados} actualizados, ${info.omitidos} omitidos.`);
-    load();
-    event.target.value = '';
+    setMessage('');
+    setError('');
+    try {
+      const body = new FormData();
+      body.append('archivo', file);
+      const data = await request('/productos/import', { method: 'POST', body });
+      const info = data.importacion;
+      const text = `Importados ${info.procesados}: ${info.insertados} nuevos, ${info.actualizados} actualizados, ${info.omitidos} omitidos.`;
+      setImportMessage(text);
+      setMessage(text);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      event.target.value = '';
+    }
   }
   function editProduct(product) {
     setEditing(product);
@@ -683,20 +692,6 @@ function Productos({ request }) {
     setEditing(null);
     setForm({ codigo: '', descripcion: '' });
     setModalOpen(false);
-  }
-  async function setProductStatus(product, estado) {
-    setMessage('');
-    setError('');
-    try {
-      await request(`/productos/${product.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ codigo: product.codigo, descripcion: product.descripcion, estado })
-      });
-      setMessage(estado ? 'Producto activado correctamente' : 'Producto desactivado correctamente');
-      load();
-    } catch (err) {
-      setError(err.message);
-    }
   }
   async function deleteProduct(product) {
     setMessage('');
@@ -711,42 +706,104 @@ function Productos({ request }) {
     }
   }
   return (
-    <Crud title="Productos" q={q} setQ={setQ} onSearch={load}>
-      <div className="toolbar-actions">
-        <IconAction label="Crear producto" icon={Plus} variant="primary" onClick={() => { resetProductForm(); setModalOpen(true); }} />
-      </div>
-      <div className="file-action">
-        <label className="file-label">
-          Importar productos
-          <input type="file" accept=".xlsx,.csv" onChange={importFile} />
-        </label>
-        {importMessage ? <span>{importMessage}</span> : null}
+    <div className="users-page products-page">
+      <div className="admin-page-heading">
+        <div>
+          <p>CATALOGO</p>
+          <h2>Productos</h2>
+        </div>
+        <div className="product-heading-actions">
+          <label className="outline-action product-import-btn">
+            <Download size={16} />
+            Importar Excel
+            <input type="file" accept=".xlsx,.csv" onChange={importFile} />
+          </label>
+          <button className="primary admin-create-btn" type="button" onClick={() => { resetProductForm(); setModalOpen(true); }}>
+            <Plus size={16} />
+            Agregar
+          </button>
+        </div>
       </div>
       <FeedbackToast message={message} error={error} onClose={() => { setMessage(''); setError(''); }} />
-      <DataTable
-        columns={['codigo', 'descripcion', 'estado', 'acciones']}
-        rows={items.map((item) => ({
-          ...item,
-          acciones: (
-            <RowActions
-              onEdit={() => editProduct(item)}
-              onToggle={() => setProductStatus(item, !item.estado)}
-              toggleLabel={item.estado ? 'Desactivar' : 'Activar'}
-              onDelete={() => deleteProduct(item)}
+      <section className="panel product-search-card">
+        <label>
+          Buscar producto
+          <div className="product-search-row">
+            <input
+              placeholder="Codigo o descripcion"
+              value={q}
+              onChange={(event) => setQ(event.target.value)}
+              onKeyDown={(event) => event.key === 'Enter' && load()}
             />
-          )
-        }))}
-      />
+            <button className="primary" type="button" onClick={load}>
+              <Search size={18} />
+              Buscar
+            </button>
+          </div>
+        </label>
+      </section>
+      <section className="panel users-card product-table-card">
+        <div className="product-table-title">
+          <h3>Inventario</h3>
+          <span>{items.length} productos</span>
+        </div>
+        <div className="table-wrap">
+          <table className="admin-table users-table products-table">
+            <thead>
+              <tr>
+                <th>Codigo</th>
+                <th>Descripcion</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.codigo}</td>
+                  <td>{item.descripcion}</td>
+                  <td>
+                    <div className="text-actions">
+                      <button className="edit-text-btn" type="button" onClick={() => editProduct(item)}>
+                        <Edit3 size={15} />
+                        Editar
+                      </button>
+                      <button className="delete-text-btn" type="button" onClick={() => deleteProduct(item)}>
+                        <Trash2 size={15} />
+                        Eliminar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {items.length === 0 ? (
+                <tr>
+                  <td className="empty-table" colSpan="3">No hay productos para mostrar.</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+        {importMessage ? <p className="muted product-import-summary">{importMessage}</p> : null}
+      </section>
       {modalOpen ? (
         <Modal title={editing ? 'Editar producto' : 'Crear producto'} onClose={resetProductForm}>
-          <form className="modal-form" onSubmit={submit}>
-            <input placeholder="Codigo" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} />
-            <input placeholder="Descripcion" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
-            <IconAction label={editing ? 'Actualizar producto' : 'Guardar producto'} icon={Save} variant="primary" type="submit" />
+          <form className="modal-form user-modal-form" onSubmit={submit}>
+            <label>
+              Codigo
+              <input value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} />
+            </label>
+            <label>
+              Descripcion
+              <input value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
+            </label>
+            <footer className="modal-actions">
+              <button className="outline-action" type="button" onClick={resetProductForm}>Cancelar</button>
+              <button className="primary" type="submit">{editing ? 'Guardar cambios' : 'Crear'}</button>
+            </footer>
           </form>
         </Modal>
       ) : null}
-    </Crud>
+    </div>
   );
 }
 

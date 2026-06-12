@@ -730,6 +730,94 @@ h1 {
   justify-content: flex-end;
 }
 
+.products-page {
+  display: grid;
+  gap: 14px;
+}
+
+.product-heading-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.product-import-btn {
+  min-height: 36px;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.product-import-btn input {
+  display: none;
+}
+
+.product-search-card {
+  padding: 14px;
+}
+
+.product-search-card label {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.product-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 74px;
+  gap: 8px;
+}
+
+.product-search-row input,
+.product-search-row button {
+  min-height: 34px;
+  border-radius: 5px;
+}
+
+.product-search-row button {
+  padding: 7px 11px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.product-table-card {
+  padding: 14px;
+}
+
+.product-table-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.product-table-title h3 {
+  margin: 0;
+}
+
+.product-table-title span,
+.product-import-summary {
+  color: #667085;
+  font-size: 13px;
+}
+
+.products-table th:last-child,
+.products-table td:last-child {
+  text-align: right;
+}
+
+.products-table td:last-child .text-actions {
+  justify-content: flex-end;
+}
+
+.products-table td:first-child {
+  width: 84px;
+  font-weight: 700;
+}
+
+.products-table td:nth-child(2) {
+  font-size: 13px;
+}
+
 .reports-page {
   display: grid;
   gap: 24px;
@@ -1502,6 +1590,12 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .product-heading-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
   .report-filter {
     grid-template-columns: 1fr;
   }
@@ -1597,6 +1691,10 @@ th {
 
   .searchbar button {
     grid-column: 1 / -1;
+  }
+
+  .product-search-row {
+    grid-template-columns: 1fr;
   }
 
   .toma-card,
