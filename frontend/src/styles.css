@@ -222,13 +222,34 @@ label {
 button.primary,
 .searchbar button,
 .table-btn,
-.file-label {
+.file-label,
+.secondary-action {
   border: 0;
   border-radius: 8px;
   padding: 10px 14px;
   background: #1570ef;
   color: white;
   font-weight: 700;
+}
+
+button.primary,
+.secondary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.secondary-action {
+  background: #ecfdf3;
+  color: #027a48;
+  border: 1px solid #abefc6;
+}
+
+.secondary-action:disabled,
+button.primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .table-btn {
@@ -277,19 +298,105 @@ th {
 
 .login-screen {
   min-height: 100vh;
+  position: relative;
   display: grid;
   place-items: center;
   padding: 20px;
-  background:
-    linear-gradient(135deg, rgba(18, 183, 106, 0.18), transparent 34%),
-    #f6f7fb;
+  overflow: hidden;
+  background: #f2f6fb;
+}
+
+.login-screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #123d64;
+  clip-path: polygon(0 0, 81% 0, 19% 100%, 0 100%);
+}
+
+.login-screen::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 88px;
+  background: rgba(229, 236, 244, 0.94);
 }
 
 .login-panel {
-  width: min(420px, 100%);
-  padding: 26px;
+  position: relative;
+  z-index: 1;
+  width: min(474px, calc(100vw - 32px));
+  padding: 39px 36px 38px;
   display: grid;
-  gap: 16px;
+  gap: 20px;
+  border-color: #dbe5ef;
+  box-shadow: 0 20px 45px rgba(16, 24, 40, 0.12);
+}
+
+.login-panel .brand {
+  justify-content: center;
+  text-align: center;
+  display: grid;
+  gap: 18px;
+}
+
+.login-panel .brand-mark {
+  width: 77px;
+  height: 77px;
+  margin: 0 auto;
+  border-radius: 8px;
+  background: #2864a3;
+  font-size: 24px;
+}
+
+.login-panel .brand strong {
+  color: #071d33;
+  font-size: 25px;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.login-panel .brand span {
+  color: #667085;
+  font-size: 15px;
+  margin-top: 8px;
+}
+
+.login-panel label {
+  gap: 8px;
+  color: #111827;
+  font-weight: 500;
+}
+
+.login-panel input {
+  min-height: 47px;
+  border-color: #cbd5e1;
+  border-radius: 7px;
+  font-size: 18px;
+}
+
+.login-panel input:focus {
+  outline: 3px solid #bfdbfe;
+  border-color: #60a5fa;
+}
+
+.login-panel .primary {
+  min-height: 42px;
+  margin-top: 6px;
+  background: #2864a3;
+}
+
+.login-footer {
+  position: absolute;
+  z-index: 1;
+  left: 62px;
+  right: 62px;
+  bottom: 17px;
+  display: flex;
+  justify-content: space-between;
+  color: #2b5884;
+  font-size: 14px;
+  letter-spacing: 0;
 }
 
 .error {
@@ -299,6 +406,167 @@ th {
   border: 1px solid #fecdca;
   padding: 10px 12px;
   border-radius: 8px;
+}
+
+.success {
+  margin: 0;
+  color: #027a48;
+  background: #ecfdf3;
+  border: 1px solid #abefc6;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.muted {
+  color: #667085;
+  margin: 0;
+}
+
+.count-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.count-panel {
+  min-height: 240px;
+}
+
+.section-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.section-title h2,
+.section-title p {
+  margin: 0;
+}
+
+.section-title h2 {
+  font-size: 18px;
+}
+
+.section-title p {
+  color: #667085;
+  margin-top: 3px;
+}
+
+.version {
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #3538cd;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.toma-list,
+.result-list,
+.count-items {
+  display: grid;
+  gap: 10px;
+}
+
+.toma-card,
+.count-item,
+.result-list button {
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.toma-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+}
+
+.toma-card.selected {
+  border-color: #1570ef;
+  box-shadow: 0 0 0 3px #d1e9ff;
+}
+
+.toma-card strong,
+.toma-card span,
+.toma-card small,
+.count-item strong,
+.count-item span,
+.result-list strong,
+.result-list span {
+  display: block;
+}
+
+.toma-card span,
+.count-item span,
+.result-list span {
+  color: #475467;
+}
+
+.toma-card small {
+  color: #667085;
+  margin-top: 4px;
+}
+
+.workbench {
+  display: grid;
+  gap: 14px;
+}
+
+.product-search {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.result-list {
+  max-height: 250px;
+  overflow: auto;
+}
+
+.result-list button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  text-align: left;
+  color: #111827;
+}
+
+.count-items {
+  max-height: 48vh;
+  overflow: auto;
+}
+
+.count-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 40px;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+}
+
+.count-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.empty-state {
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  color: #667085;
 }
 
 @media (max-width: 980px) {
@@ -353,6 +621,14 @@ th {
   .file-action {
     grid-template-columns: 1fr;
   }
+
+  .count-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .count-items {
+    max-height: none;
+  }
 }
 
 @media (max-width: 620px) {
@@ -368,6 +644,33 @@ th {
     display: none;
   }
 
+  .login-screen {
+    align-items: start;
+    padding-top: 70px;
+  }
+
+  .login-screen::before {
+    clip-path: polygon(0 0, 100% 0, 100% 42%, 0 72%);
+  }
+
+  .login-screen::after {
+    height: 74px;
+  }
+
+  .login-panel {
+    padding: 30px 22px;
+  }
+
+  .login-panel .brand strong {
+    font-size: 21px;
+  }
+
+  .login-footer {
+    left: 22px;
+    right: 22px;
+    font-size: 13px;
+  }
+
   .grid.metrics {
     grid-template-columns: 1fr;
   }
@@ -378,5 +681,18 @@ th {
 
   .searchbar button {
     grid-column: 1 / -1;
+  }
+
+  .toma-card,
+  .count-item {
+    grid-template-columns: 1fr;
+  }
+
+  .count-item .icon-btn {
+    width: 100%;
+  }
+
+  .count-actions {
+    display: grid;
   }
 }

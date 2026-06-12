@@ -12,6 +12,16 @@ import {
   importStorageDir,
   ensureStorage
 } from '../services/excelService.js';
+import {
+  activeDraftForUser,
+  assertVersion,
+  bumpVersion,
+  closeExpiredTomas,
+  closeTomaIfComplete,
+  refreshTomaSummary,
+  replaceDetalle,
+  validateTomaWindow
+} from '../services/conteoService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/errors.js';
 
@@ -59,6 +69,121 @@ webApi.get('/dashboard', requireWebUser, asyncHandler(async (req, res) => {
       usuarios: users.rows[0].total
     }
   });
+}));
+
+webApi.get('/mi/tomas', requireWebUser, requirePermission('count'), asyncHandler(async (req, res) => {
+  await closeExpiredTomas(pool);
+  const { rows } = await pool.query(
+    `SELECT t.id AS toma_id, t.numero_toma, t.nombre_toma, t.agencia, t.estado AS toma_estado,
+            t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin,
+            tu.estado AS asignacion_estado,
+            c.id AS conteo_id, c.estado AS conteo_estado, c.version AS conteo_version,
+            c.fecha_inicio, c.fecha_finalizacion
+     FROM toma_usuarios tu
+     INNER JOIN tomas_fisicas t ON t.id = tu.toma_id
+     LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id
+     WHERE tu.usuario_id = $1 AND t.estado = 'abierta'
+     ORDER BY t.id DESC`,
+    [req.user.id]
+  );
+  res.json({ ok: true, tomas: rows });
+}));
+
+webApi.post('/mi/tomas/:id/iniciar', requireWebUser, requirePermission('count'), asyncHandler(async (req, res) => {
+  const tomaId = Number(req.params.id || 0);
+  if (tomaId <= 0) {
+    throw new AppError('Toma invalida', 422);
+  }
+
+  const conteoId = await withTransaction(async (db) => {
+    await closeExpiredTomas(db, tomaId);
+    const tomaResult = await db.query(
+      `SELECT t.id, t.nombre_toma, t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin
+       FROM tomas_fisicas t
+       INNER JOIN toma_usuarios tu ON tu.toma_id = t.id
+       WHERE t.id = $1 AND tu.usuario_id = $2 AND t.estado = 'abierta'
+       FOR UPDATE`,
+      [tomaId, req.user.id]
+    );
+    const toma = tomaResult.rows[0];
+    if (!toma) {
+      throw new AppError('Toma no disponible', 422);
+    }
+    validateTomaWindow(toma);
+
+    const current = await db.query('SELECT id FROM conteos WHERE toma_id = $1 AND usuario_id = $2 LIMIT 1', [tomaId, req.user.id]);
+    let id = current.rows[0]?.id;
+    if (!id) {
+      const created = await db.query(
+        "INSERT INTO conteos (toma_id, usuario_id, nombre_conteo, estado, fecha_inicio) VALUES ($1, $2, $3, 'borrador', NOW()) RETURNING id",
+        [tomaId, req.user.id, toma.nombre_toma]
+      );
+      id = created.rows[0].id;
+    }
+    await db.query("UPDATE toma_usuarios SET estado = 'en_proceso' WHERE toma_id = $1 AND usuario_id = $2 AND estado = 'asignado'", [tomaId, req.user.id]);
+    return id;
+  });
+
+  res.json({ ok: true, conteo_id: Number(conteoId) });
+}));
+
+webApi.get('/mi/conteos/:id', requireWebUser, requirePermission('count'), asyncHandler(async (req, res) => {
+  const conteoId = Number(req.params.id || 0);
+  if (conteoId <= 0) {
+    throw new AppError('Conteo invalido', 422);
+  }
+  const conteo = await pool.query(
+    `SELECT c.id, c.version, c.estado, c.toma_id, t.numero_toma, t.nombre_toma
+     FROM conteos c
+     INNER JOIN tomas_fisicas t ON t.id = c.toma_id
+     WHERE c.id = $1 AND c.usuario_id = $2
+     LIMIT 1`,
+    [conteoId, req.user.id]
+  );
+  if (!conteo.rows[0]) {
+    throw new AppError('Conteo no disponible', 404);
+  }
+  const items = await pool.query('SELECT producto_id, codigo, descripcion, cantidad FROM conteo_detalle WHERE conteo_id = $1 ORDER BY id', [conteoId]);
+  res.json({ ok: true, conteo: conteo.rows[0], items: items.rows });
+}));
+
+webApi.get('/mi/productos', requireWebUser, requirePermission('count'), asyncHandler(async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (q.length < 3) {
+    res.json({ ok: true, productos: [] });
+    return;
+  }
+  const { rows } = await pool.query(
+    `SELECT id, codigo, descripcion
+     FROM productos
+     WHERE estado = TRUE AND (codigo ILIKE $1 OR descripcion ILIKE $2)
+     ORDER BY CASE WHEN codigo = $3 THEN 0 ELSE 1 END, descripcion, codigo
+     LIMIT 30`,
+    [`${q}%`, `%${q}%`, q]
+  );
+  res.json({ ok: true, productos: rows });
+}));
+
+webApi.post('/mi/conteos/:id/borrador', requireWebUser, requirePermission('count'), asyncHandler(async (req, res) => {
+  const conteoId = Number(req.params.id || 0);
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  const expectedVersion = Number(req.body.conteo_version || 0);
+  if (conteoId <= 0 || items.length === 0) {
+    throw new AppError('Datos incompletos', 422);
+  }
+  const result = await saveWebConteo(req.user.id, conteoId, expectedVersion, items, false);
+  res.json(result);
+}));
+
+webApi.post('/mi/conteos/:id/finalizar', requireWebUser, requirePermission('count'), asyncHandler(async (req, res) => {
+  const conteoId = Number(req.params.id || 0);
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  const expectedVersion = Number(req.body.conteo_version || 0);
+  if (conteoId <= 0 || items.length === 0) {
+    throw new AppError('Datos incompletos', 422);
+  }
+  const result = await saveWebConteo(req.user.id, conteoId, expectedVersion, items, true);
+  res.json(result);
 }));
 
 webApi.get('/productos', requireWebUser, asyncHandler(async (req, res) => {
@@ -235,4 +360,33 @@ function publicUser(user) {
     usuario: user.usuario,
     rol: user.rol
   };
+}
+
+async function saveWebConteo(userId, conteoId, expectedVersion, items, finish) {
+  return withTransaction(async (db) => {
+    const conteo = await activeDraftForUser(db, conteoId, userId, true);
+    if (!conteo) {
+      throw new AppError('Conteo no disponible', 422);
+    }
+    validateTomaWindow(conteo);
+    assertVersion(conteo, expectedVersion);
+    const lineas = await replaceDetalle(db, conteoId, items);
+    if (lineas === 0) {
+      throw new AppError('Sin productos validos', 422);
+    }
+    const version = await bumpVersion(db, conteoId);
+
+    if (finish) {
+      await db.query(
+        "UPDATE conteos SET estado = 'finalizado', fecha_finalizacion = NOW(), archivo_excel = NULL, updated_at = NOW() WHERE id = $1",
+        [conteoId]
+      );
+      await db.query("UPDATE toma_usuarios SET estado = 'finalizado' WHERE toma_id = $1 AND usuario_id = $2", [conteo.toma_id, userId]);
+      await db.query('UPDATE tomas_fisicas SET archivo_excel = NULL WHERE id = $1', [conteo.toma_id]);
+      await closeTomaIfComplete(db, conteo.toma_id);
+      await refreshTomaSummary(db, conteo.toma_id);
+    }
+
+    return { ok: true, conteo_id: conteoId, conteo_version: version, lineas, estado: finish ? 'finalizado' : 'borrador' };
+  });
 }
