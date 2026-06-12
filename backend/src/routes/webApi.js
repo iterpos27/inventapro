@@ -241,7 +241,18 @@ webApi.patch('/productos/:id', requireWebUser, requirePermission('admin'), async
     'UPDATE productos SET codigo = $1, descripcion = $2, estado = $3 WHERE id = $4 RETURNING *',
     [req.body.codigo, req.body.descripcion, Boolean(req.body.estado), req.params.id]
   );
+  if (!rows[0]) {
+    throw new AppError('Producto no encontrado', 404);
+  }
   res.json({ ok: true, producto: rows[0] });
+}));
+
+webApi.delete('/productos/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const { rows } = await pool.query('UPDATE productos SET estado = FALSE WHERE id = $1 RETURNING id', [req.params.id]);
+  if (!rows[0]) {
+    throw new AppError('Producto no encontrado', 404);
+  }
+  res.json({ ok: true, id: Number(rows[0].id), message: 'Producto eliminado correctamente' });
 }));
 
 webApi.get('/agencias', requireWebUser, asyncHandler(async (req, res) => {
@@ -259,6 +270,30 @@ webApi.post('/agencias', requireWebUser, requirePermission('admin'), asyncHandle
     [nombre]
   );
   res.status(201).json({ ok: true, agencia: rows[0] });
+}));
+
+webApi.patch('/agencias/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const nombre = String(req.body.nombre || '').trim().toUpperCase();
+  const estado = req.body.estado === undefined ? true : Boolean(req.body.estado);
+  if (!nombre) {
+    throw new AppError('Nombre requerido', 422);
+  }
+  const { rows } = await pool.query(
+    'UPDATE agencias SET nombre = $1, estado = $2 WHERE id = $3 RETURNING *',
+    [nombre, estado, req.params.id]
+  );
+  if (!rows[0]) {
+    throw new AppError('Agencia no encontrada', 404);
+  }
+  res.json({ ok: true, agencia: rows[0] });
+}));
+
+webApi.delete('/agencias/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const { rows } = await pool.query('UPDATE agencias SET estado = FALSE WHERE id = $1 RETURNING id', [req.params.id]);
+  if (!rows[0]) {
+    throw new AppError('Agencia no encontrada', 404);
+  }
+  res.json({ ok: true, id: Number(rows[0].id), message: 'Agencia desactivada correctamente' });
 }));
 
 webApi.get('/usuarios', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
@@ -282,6 +317,40 @@ webApi.post('/usuarios', requireWebUser, requirePermission('admin'), asyncHandle
   res.status(201).json({ ok: true, usuario: rows[0] });
 }));
 
+webApi.patch('/usuarios/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const nombre = String(req.body.nombre || '').trim();
+  const usuario = String(req.body.usuario || '').trim();
+  const password = String(req.body.password || '');
+  const rol = String(req.body.rol || 'usuario');
+  const estado = req.body.estado === undefined ? true : Boolean(req.body.estado);
+  if (!nombre || !usuario) {
+    throw new AppError('Complete los datos del usuario', 422);
+  }
+  if (password && password.length < 10) {
+    throw new AppError('La contrasena debe tener al menos 10 caracteres', 422);
+  }
+
+  const params = [nombre, usuario, rol, estado, req.params.id];
+  let sql = 'UPDATE usuarios SET nombre = $1, usuario = $2, rol = $3, estado = $4 WHERE id = $5 RETURNING id, nombre, usuario, rol, estado';
+  if (password) {
+    params.splice(2, 0, await bcrypt.hash(password, 12));
+    sql = 'UPDATE usuarios SET nombre = $1, usuario = $2, password = $3, rol = $4, estado = $5 WHERE id = $6 RETURNING id, nombre, usuario, rol, estado';
+  }
+  const { rows } = await pool.query(sql, params);
+  if (!rows[0]) {
+    throw new AppError('Usuario no encontrado', 404);
+  }
+  res.json({ ok: true, usuario: rows[0] });
+}));
+
+webApi.delete('/usuarios/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const { rows } = await pool.query('UPDATE usuarios SET estado = FALSE WHERE id = $1 RETURNING id', [req.params.id]);
+  if (!rows[0]) {
+    throw new AppError('Usuario no encontrado', 404);
+  }
+  res.json({ ok: true, id: Number(rows[0].id), message: 'Usuario desactivado correctamente' });
+}));
+
 webApi.get('/tomas', requireWebUser, asyncHandler(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT t.*,
@@ -297,34 +366,231 @@ webApi.get('/tomas', requireWebUser, asyncHandler(async (req, res) => {
 }));
 
 webApi.post('/tomas', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
-  const body = req.body;
+  const fields = validateTomaPayload(req.body);
+  const usuarios = normalizeIds(req.body.usuarios);
+  if (!usuarios.length) {
+    throw new AppError('Seleccione al menos un usuario participante', 422);
+  }
+
   const result = await withTransaction(async (db) => {
+    const numeroToma = await nextTomaNumber(db, fields.fecha_habilitacion);
+    const nombreToma = buildTomaName(numeroToma, fields);
     const toma = await db.query(
       `INSERT INTO tomas_fisicas (
-        numero_toma, agencia, fecha_toma, fecha_habilitacion, fecha_cierre, hora_inicio, hora_fin, nombre_toma, creado_por
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+        numero_toma, agencia, fecha_toma, fecha_habilitacion, fecha_cierre, hora_inicio, hora_fin, nombre_toma, estado, creado_por
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'abierta',$9) RETURNING *`,
       [
-        body.numero_toma,
-        body.agencia || null,
-        body.fecha_toma,
-        body.fecha_habilitacion || null,
-        body.fecha_cierre || null,
-        body.hora_inicio || null,
-        body.hora_fin || null,
-        body.nombre_toma,
+        numeroToma,
+        fields.agencia || null,
+        fields.fecha_habilitacion,
+        fields.fecha_habilitacion,
+        fields.fecha_cierre,
+        fields.hora_inicio,
+        fields.hora_fin,
+        nombreToma,
         req.user.id
       ]
     );
-    const usuarios = Array.isArray(body.usuarios) ? body.usuarios : [];
-    for (const usuarioId of usuarios) {
-      await db.query(
-        'INSERT INTO toma_usuarios (toma_id, usuario_id) VALUES ($1, $2) ON CONFLICT (toma_id, usuario_id) DO NOTHING',
-        [toma.rows[0].id, usuarioId]
-      );
+    const participantes = await validCountingUsers(db, usuarios);
+    if (!participantes.length) {
+      throw new AppError('Sin usuarios participantes', 422);
     }
-    return toma.rows[0];
+    for (const usuarioId of participantes) {
+      await db.query('INSERT INTO toma_usuarios (toma_id, usuario_id) VALUES ($1, $2)', [toma.rows[0].id, usuarioId]);
+    }
+    await refreshTomaSummary(db, toma.rows[0].id);
+    return { ...toma.rows[0], usuarios_asignados: participantes.length };
   });
-  res.status(201).json({ ok: true, toma: result });
+  res.status(201).json({ ok: true, toma: result, message: 'Toma fisica creada para usuarios activos' });
+}));
+
+webApi.get('/tomas/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const tomaId = Number(req.params.id || 0);
+  const toma = await pool.query(
+    `SELECT t.*, u.nombre AS creado_por_nombre,
+            COALESCE(r.usuarios_asignados, 0) AS usuarios_asignados,
+            COALESCE(r.usuarios_finalizados, 0) AS usuarios_finalizados,
+            COALESCE(r.unidades_contadas, 0) AS unidades_contadas
+     FROM tomas_fisicas t
+     INNER JOIN usuarios u ON u.id = t.creado_por
+     LEFT JOIN toma_resumen r ON r.toma_id = t.id
+     WHERE t.id = $1`,
+    [tomaId]
+  );
+  if (!toma.rows[0]) {
+    throw new AppError('Toma no encontrada', 404);
+  }
+  const participantes = await pool.query(
+    `SELECT tu.estado AS asignacion_estado, tu.fecha_asignacion, u.id AS usuario_id, u.nombre, u.usuario,
+            c.id AS conteo_id, c.estado AS conteo_estado, c.fecha_inicio, c.fecha_finalizacion
+     FROM toma_usuarios tu
+     INNER JOIN usuarios u ON u.id = tu.usuario_id
+     LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id
+     WHERE tu.toma_id = $1
+     ORDER BY u.nombre`,
+    [tomaId]
+  );
+  res.json({ ok: true, toma: toma.rows[0], participantes: participantes.rows });
+}));
+
+webApi.patch('/tomas/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const tomaId = Number(req.params.id || 0);
+  const fields = validateTomaPayload(req.body);
+  const result = await withTransaction(async (db) => {
+    const current = await db.query('SELECT numero_toma FROM tomas_fisicas WHERE id = $1 FOR UPDATE', [tomaId]);
+    if (!current.rows[0]) {
+      throw new AppError('Toma no encontrada', 404);
+    }
+    const nombreToma = buildTomaName(current.rows[0].numero_toma, fields);
+    const { rows } = await db.query(
+      `UPDATE tomas_fisicas
+       SET agencia = $1, fecha_toma = $2, fecha_habilitacion = $3, fecha_cierre = $4, hora_inicio = $5, hora_fin = $6, nombre_toma = $7
+       WHERE id = $8
+       RETURNING *`,
+      [fields.agencia || null, fields.fecha_habilitacion, fields.fecha_habilitacion, fields.fecha_cierre, fields.hora_inicio, fields.hora_fin, nombreToma, tomaId]
+    );
+    await refreshTomaSummary(db, tomaId);
+    return rows[0];
+  });
+  res.json({ ok: true, toma: result, message: 'Toma actualizada correctamente' });
+}));
+
+webApi.delete('/tomas/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const tomaId = Number(req.params.id || 0);
+  await withTransaction(async (db) => {
+    const detail = await db.query(
+      `SELECT COUNT(*)::int AS total
+       FROM conteo_detalle d
+       INNER JOIN conteos c ON c.id = d.conteo_id
+       WHERE c.toma_id = $1`,
+      [tomaId]
+    );
+    if (detail.rows[0].total > 0) {
+      throw new AppError('La toma tiene conteos con detalle', 422);
+    }
+    await db.query('DELETE FROM toma_usuarios WHERE toma_id = $1', [tomaId]);
+    await db.query('DELETE FROM conteos WHERE toma_id = $1', [tomaId]);
+    const deleted = await db.query('DELETE FROM tomas_fisicas WHERE id = $1 RETURNING id', [tomaId]);
+    if (!deleted.rows[0]) {
+      throw new AppError('Toma no encontrada', 404);
+    }
+  });
+  res.json({ ok: true, id: tomaId, message: 'Toma eliminada correctamente' });
+}));
+
+webApi.post('/tomas/:id/asignaciones', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const tomaId = Number(req.params.id || 0);
+  const usuarios = normalizeIds(req.body.usuarios);
+  if (!usuarios.length) {
+    throw new AppError('Seleccione usuarios validos', 422);
+  }
+  const assigned = await withTransaction(async (db) => {
+    const toma = await db.query("SELECT id FROM tomas_fisicas WHERE id = $1 AND estado = 'abierta' FOR UPDATE", [tomaId]);
+    if (!toma.rows[0]) {
+      throw new AppError('Toma no disponible para asignacion', 422);
+    }
+    const valid = await validCountingUsers(db, usuarios);
+    let count = 0;
+    for (const usuarioId of valid) {
+      const inserted = await db.query(
+        'INSERT INTO toma_usuarios (toma_id, usuario_id) VALUES ($1, $2) ON CONFLICT (toma_id, usuario_id) DO NOTHING RETURNING id',
+        [tomaId, usuarioId]
+      );
+      if (inserted.rowCount > 0) {
+        count += 1;
+      }
+    }
+    if (count === 0) {
+      throw new AppError('Sin usuarios nuevos para asignar', 422);
+    }
+    await refreshTomaSummary(db, tomaId);
+    return count;
+  });
+  res.json({ ok: true, usuarios_asignados: assigned, message: 'Usuarios asignados correctamente' });
+}));
+
+webApi.post('/tomas/:id/estado', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const tomaId = Number(req.params.id || 0);
+  const accion = String(req.body.accion || '');
+  if (!['cerrar', 'reabrir'].includes(accion)) {
+    throw new AppError('Accion invalida', 422);
+  }
+  const toma = await withTransaction(async (db) => {
+    const current = await db.query('SELECT id FROM tomas_fisicas WHERE id = $1 FOR UPDATE', [tomaId]);
+    if (!current.rows[0]) {
+      throw new AppError('Toma no encontrada', 404);
+    }
+    if (accion === 'cerrar') {
+      await db.query("UPDATE tomas_fisicas SET estado = 'finalizada', fecha_finalizacion = NOW() WHERE id = $1 AND estado = 'abierta'", [tomaId]);
+      await db.query(
+        `UPDATE conteos c
+         SET estado = 'finalizado', fecha_finalizacion = COALESCE(fecha_finalizacion, NOW()), updated_at = NOW()
+         WHERE c.toma_id = $1
+           AND c.estado = 'borrador'
+           AND EXISTS (SELECT 1 FROM conteo_detalle d WHERE d.conteo_id = c.id)`,
+        [tomaId]
+      );
+      await db.query(
+        `UPDATE toma_usuarios tu
+         SET estado = 'finalizado'
+         WHERE tu.toma_id = $1
+           AND EXISTS (SELECT 1 FROM conteos c INNER JOIN conteo_detalle d ON d.conteo_id = c.id WHERE c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id)`,
+        [tomaId]
+      );
+    } else {
+      await db.query("UPDATE tomas_fisicas SET estado = 'abierta', fecha_finalizacion = NULL, archivo_excel = NULL WHERE id = $1 AND estado = 'finalizada'", [tomaId]);
+    }
+    await refreshTomaSummary(db, tomaId);
+    const updated = await db.query('SELECT * FROM tomas_fisicas WHERE id = $1', [tomaId]);
+    return updated.rows[0];
+  });
+  res.json({ ok: true, toma, message: accion === 'cerrar' ? 'Toma cerrada correctamente' : 'Toma reabierta correctamente' });
+}));
+
+webApi.post('/tomas/:id/reutilizar', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const sourceId = Number(req.params.id || 0);
+  const fields = validateTomaPayload(req.body, { allowAgencyEmpty: true });
+  const toma = await withTransaction(async (db) => {
+    const source = await db.query('SELECT id, agencia FROM tomas_fisicas WHERE id = $1 FOR UPDATE', [sourceId]);
+    if (!source.rows[0]) {
+      throw new AppError('Toma origen no encontrada', 404);
+    }
+    const numeroToma = await nextTomaNumber(db, fields.fecha_habilitacion);
+    const sourceFields = { ...fields, agencia: String(source.rows[0].agencia || '').toUpperCase() };
+    const nombreToma = buildTomaName(numeroToma, sourceFields);
+    const created = await db.query(
+      `INSERT INTO tomas_fisicas (numero_toma, agencia, fecha_toma, fecha_habilitacion, fecha_cierre, hora_inicio, hora_fin, nombre_toma, estado, creado_por)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'abierta',$9)
+       RETURNING *`,
+      [numeroToma, sourceFields.agencia || null, fields.fecha_habilitacion, fields.fecha_habilitacion, fields.fecha_cierre, fields.hora_inicio, fields.hora_fin, nombreToma, req.user.id]
+    );
+    await db.query(
+      `INSERT INTO toma_usuarios (toma_id, usuario_id)
+       SELECT $1, tu.usuario_id
+       FROM toma_usuarios tu
+       INNER JOIN usuarios u ON u.id = tu.usuario_id
+       WHERE tu.toma_id = $2 AND u.estado = TRUE AND u.rol IN ('usuario', 'operador')`,
+      [created.rows[0].id, sourceId]
+    );
+    await refreshTomaSummary(db, created.rows[0].id);
+    return created.rows[0];
+  });
+  res.status(201).json({ ok: true, toma, message: 'Toma reutilizada correctamente' });
+}));
+
+webApi.post('/tomas/:id/usuarios/:usuarioId/habilitar', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const tomaId = Number(req.params.id || 0);
+  const usuarioId = Number(req.params.usuarioId || 0);
+  await withTransaction(async (db) => {
+    await db.query(
+      "UPDATE conteos SET estado = 'borrador', fecha_finalizacion = NULL WHERE toma_id = $1 AND usuario_id = $2 AND estado = 'finalizado'",
+      [tomaId, usuarioId]
+    );
+    await db.query("UPDATE toma_usuarios SET estado = 'en_proceso' WHERE toma_id = $1 AND usuario_id = $2", [tomaId, usuarioId]);
+    await db.query("UPDATE tomas_fisicas SET estado = 'abierta', fecha_finalizacion = NULL WHERE id = $1", [tomaId]);
+    await refreshTomaSummary(db, tomaId);
+  });
+  res.json({ ok: true, message: 'Conteo habilitado para edicion' });
 }));
 
 webApi.get('/conteos', requireWebUser, asyncHandler(async (req, res) => {
@@ -373,6 +639,98 @@ function publicUser(user) {
     usuario: user.usuario,
     rol: user.rol
   };
+}
+
+function normalizeIds(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return [...new Set(values.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0))];
+}
+
+function validateTomaPayload(body, options = {}) {
+  const agencia = String(body.agencia || '').trim().toUpperCase();
+  const fecha_habilitacion = String(body.fecha_habilitacion || body.fecha_conteo || '').trim();
+  const fecha_cierre = String(body.fecha_cierre || '').trim();
+  const hora_inicio = String(body.hora_inicio || '').trim();
+  const hora_fin = String(body.hora_fin || '').trim();
+
+  if (!options.allowAgencyEmpty && agencia.length > 120) {
+    throw new AppError('Agencia invalida', 422);
+  }
+  if (!fecha_habilitacion || !fecha_cierre || !hora_inicio || !hora_fin) {
+    throw new AppError('Complete fechas y horas de la toma', 422);
+  }
+  if (!isIsoDate(fecha_habilitacion) || !isIsoDate(fecha_cierre)) {
+    throw new AppError('Fecha invalida', 422);
+  }
+  if (fecha_cierre < fecha_habilitacion) {
+    throw new AppError('La fecha de finalizacion no puede ser menor a la habilitacion', 422);
+  }
+  if (!/^\d{2}:\d{2}$/.test(hora_inicio) || !/^\d{2}:\d{2}$/.test(hora_fin)) {
+    throw new AppError('Hora invalida', 422);
+  }
+
+  return { agencia, fecha_habilitacion, fecha_cierre, hora_inicio, hora_fin };
+}
+
+async function nextTomaNumber(db, fechaHabilitacion) {
+  const year = fechaHabilitacion.slice(0, 4);
+  const last = await db.query(
+    `SELECT numero_toma
+     FROM tomas_fisicas
+     WHERE numero_toma LIKE $1
+     ORDER BY numero_toma DESC
+     LIMIT 1
+     FOR UPDATE`,
+    [`${year}-%`]
+  );
+  const match = String(last.rows[0]?.numero_toma || '').match(/^\d{4}-(\d{3})$/);
+  const nextSequence = match ? Number(match[1]) + 1 : 1;
+  return `${year}-${String(nextSequence).padStart(3, '0')}`;
+}
+
+function buildTomaName(numeroToma, fields) {
+  const dayName = dayNameEs(fields.fecha_habilitacion);
+  const endDayName = dayNameEs(fields.fecha_cierre);
+  return [
+    `TOMA FISICA # ${numeroToma}`,
+    `AGENCIA: ${fields.agencia || ''}`,
+    `HABILITACION: ${dayName} ${formatDateEc(fields.fecha_habilitacion)} ${fields.hora_inicio}`,
+    `FINALIZACION: ${endDayName} ${formatDateEc(fields.fecha_cierre)} ${fields.hora_fin}`
+  ].join('\n');
+}
+
+async function validCountingUsers(db, ids) {
+  if (!ids.length) {
+    return [];
+  }
+  const placeholders = ids.map((_, index) => `$${index + 1}`).join(',');
+  const { rows } = await db.query(
+    `SELECT id
+     FROM usuarios
+     WHERE rol IN ('usuario', 'operador') AND estado = TRUE AND id IN (${placeholders})`,
+    ids
+  );
+  return rows.map((row) => Number(row.id));
+}
+
+function isIsoDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function dayNameEs(value) {
+  const days = ['DOMINGO', 'LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO'];
+  return days[new Date(`${value}T00:00:00Z`).getUTCDay()];
+}
+
+function formatDateEc(value) {
+  const [year, month, day] = value.split('-');
+  return `${day}/${month}/${year}`;
 }
 
 async function saveWebConteo(userId, conteoId, expectedVersion, items, finish) {
