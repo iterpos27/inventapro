@@ -1,5 +1,7 @@
 import fs from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import path from 'node:path';
+import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import ExcelJS from 'exceljs';
 import { pool, withTransaction } from '../db/pool.js';
@@ -148,46 +150,15 @@ export async function importProductsFromFile(file, userId) {
     throw new AppError('Formato no permitido. Use .xlsx o .csv', 422);
   }
 
-  const workbook = new ExcelJS.Workbook();
-  if (extension === '.csv') {
-    await workbook.csv.readFile(file.path);
-  } else {
-    await workbook.xlsx.readFile(file.path);
-  }
-  const sheet = workbook.worksheets[0];
-  if (!sheet || sheet.rowCount < 2) {
-    throw new AppError('Archivo sin datos', 422);
-  }
-
-  const headerRow = sheet.getRow(1);
-  const headers = {};
-  headerRow.eachCell((cell, colNumber) => {
-    const key = normalizeHeader(cell.value);
-    if (key) {
-      headers[key] = colNumber;
-    }
-  });
-
+  const headerInfo = extension === '.csv'
+    ? await readCsvHeaders(file.path)
+    : await readXlsxHeaders(file.path);
+  const { headers, totalRows } = headerInfo;
   const codigoCol = headers.codigo;
   const descripcionCol = headers.descripcion;
   if (!codigoCol || !descripcionCol) {
     throw new AppError('Columnas requeridas no encontradas: codigo, descripcion', 422);
   }
-
-  const products = [];
-  let omitidos = 0;
-  sheet.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) {
-      return;
-    }
-    const codigo = normalizeProductCode(row.getCell(codigoCol).value);
-    const descripcion = String(row.getCell(descripcionCol).text || '').trim();
-    if (!codigo || !descripcion) {
-      omitidos += 1;
-      return;
-    }
-    products.push({ codigo, descripcion });
-  });
 
   const summary = await withTransaction(async (db) => {
     const job = await db.query(
@@ -195,36 +166,199 @@ export async function importProductsFromFile(file, userId) {
         (usuario_id, archivo, nombre_original, extension, codigo_col, descripcion_col, total_rows, estado, actualizado_en)
        VALUES ($1,$2,$3,$4,$5,$6,$7,'procesando',NOW())
        RETURNING id`,
-      [userId, file.path, file.originalname, extension.slice(1), codigoCol, descripcionCol, sheet.rowCount]
+      [userId, file.path, file.originalname, extension.slice(1), codigoCol, descripcionCol, totalRows]
     );
-    let insertados = 0;
-    let actualizados = 0;
-    for (const product of products) {
-      const existing = await db.query('SELECT id FROM productos WHERE codigo = $1', [product.codigo]);
-      await db.query(
-        `INSERT INTO productos (codigo, descripcion, estado)
-         VALUES ($1, $2, TRUE)
-         ON CONFLICT (codigo) DO UPDATE SET descripcion = EXCLUDED.descripcion, estado = TRUE`,
-        [product.codigo, product.descripcion]
-      );
-      if (existing.rowCount > 0) {
-        actualizados += 1;
-      } else {
-        insertados += 1;
-      }
-    }
+    const counters = extension === '.csv'
+      ? await importCsvProducts(db, file.path, codigoCol, descripcionCol)
+      : await importXlsxProducts(db, file.path, codigoCol, descripcionCol);
     await db.query(
       `UPDATE import_jobs
        SET current_row = $1, procesados = $2, insertados = $3, actualizados = $4, omitidos = $5,
            estado = 'finalizado', actualizado_en = NOW(), finalizado_en = NOW()
        WHERE id = $6`,
-      [sheet.rowCount + 1, products.length, insertados, actualizados, omitidos, job.rows[0].id]
+      [
+        counters.rowsRead + 2,
+        counters.procesados,
+        counters.insertados,
+        0,
+        counters.omitidos,
+        job.rows[0].id
+      ]
     );
-    return { job_id: Number(job.rows[0].id), procesados: products.length, insertados, actualizados, omitidos };
+    return {
+      job_id: Number(job.rows[0].id),
+      procesados: counters.procesados,
+      insertados: counters.insertados,
+      actualizados: 0,
+      omitidos: counters.omitidos
+    };
   });
 
   await fs.unlink(file.path).catch(() => {});
   return summary;
+}
+
+async function readCsvHeaders(filePath) {
+  const rl = readline.createInterface({ input: createReadStream(filePath), crlfDelay: Infinity });
+  let rowNumber = 0;
+  let headers = null;
+  for await (const line of rl) {
+    rowNumber += 1;
+    if (rowNumber === 1) {
+      headers = headersFromValues(parseCsvLine(line));
+    }
+  }
+  if (!headers) {
+    throw new AppError('Archivo sin datos', 422);
+  }
+  return { headers, totalRows: rowNumber };
+}
+
+async function readXlsxHeaders(filePath) {
+  const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(filePath, {
+    entries: 'emit',
+    sharedStrings: 'cache',
+    styles: 'ignore',
+    hyperlinks: 'ignore',
+    worksheets: 'emit'
+  });
+  for await (const worksheetReader of workbookReader) {
+    let totalRows = 0;
+    let headers = null;
+    for await (const row of worksheetReader) {
+      totalRows = Math.max(totalRows, row.number || totalRows + 1);
+      if (row.number === 1) {
+        headers = headersFromRow(row);
+      }
+    }
+    if (!headers || totalRows < 2) {
+      throw new AppError('Archivo sin datos', 422);
+    }
+    return { headers, totalRows };
+  }
+  throw new AppError('Archivo sin datos', 422);
+}
+
+async function importCsvProducts(db, filePath, codigoCol, descripcionCol) {
+  const rl = readline.createInterface({ input: createReadStream(filePath), crlfDelay: Infinity });
+  const counters = createImportCounters();
+  const batch = [];
+  for await (const line of rl) {
+    counters.rowsRead += 1;
+    if (counters.rowsRead === 1) continue;
+    const values = parseCsvLine(line);
+    addProductToBatch(values[codigoCol - 1], values[descripcionCol - 1], batch, counters);
+    if (batch.length >= 1000) {
+      await flushProductImportBatch(db, batch, counters);
+    }
+  }
+  await flushProductImportBatch(db, batch, counters);
+  counters.rowsRead = Math.max(0, counters.rowsRead - 1);
+  return counters;
+}
+
+async function importXlsxProducts(db, filePath, codigoCol, descripcionCol) {
+  const counters = createImportCounters();
+  const batch = [];
+  const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(filePath, {
+    entries: 'emit',
+    sharedStrings: 'cache',
+    styles: 'ignore',
+    hyperlinks: 'ignore',
+    worksheets: 'emit'
+  });
+  let processedFirstSheet = false;
+  for await (const worksheetReader of workbookReader) {
+    if (processedFirstSheet) break;
+    processedFirstSheet = true;
+    for await (const row of worksheetReader) {
+      if (row.number === 1) continue;
+      counters.rowsRead += 1;
+      addProductToBatch(row.getCell(codigoCol).value, row.getCell(descripcionCol).value, batch, counters);
+      if (batch.length >= 1000) {
+        await flushProductImportBatch(db, batch, counters);
+      }
+    }
+  }
+  await flushProductImportBatch(db, batch, counters);
+  return counters;
+}
+
+function createImportCounters() {
+  return { rowsRead: 0, procesados: 0, insertados: 0, omitidos: 0 };
+}
+
+function addProductToBatch(codigoValue, descripcionValue, batch, counters) {
+  const codigo = normalizeProductCode(codigoValue);
+  const descripcion = normalizeCellText(descripcionValue);
+  if (!codigo || !descripcion) {
+    counters.omitidos += 1;
+    return;
+  }
+  counters.procesados += 1;
+  batch.push({ codigo, descripcion });
+}
+
+async function flushProductImportBatch(db, batch, counters) {
+  if (!batch.length) return;
+  const codes = [];
+  const descriptions = [];
+  for (const product of batch.splice(0)) {
+    codes.push(product.codigo);
+    descriptions.push(product.descripcion);
+  }
+  const result = await db.query(
+    `INSERT INTO productos (codigo, descripcion, estado)
+     SELECT codigo, descripcion, TRUE
+     FROM UNNEST($1::text[], $2::text[]) AS incoming(codigo, descripcion)
+     ON CONFLICT (codigo) DO NOTHING`,
+    [codes, descriptions]
+  );
+  counters.insertados += result.rowCount;
+  counters.omitidos += codes.length - result.rowCount;
+}
+
+function headersFromRow(row) {
+  const headers = {};
+  row.eachCell((cell, colNumber) => {
+    const key = normalizeHeader(cell.value);
+    if (key) {
+      headers[key] = colNumber;
+    }
+  });
+  return headers;
+}
+
+function headersFromValues(values) {
+  return values.reduce((headers, value, index) => {
+    const key = normalizeHeader(value);
+    if (key) {
+      headers[key] = index + 1;
+    }
+    return headers;
+  }, {});
+}
+
+function parseCsvLine(line) {
+  const values = [];
+  let current = '';
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (char === '"' && quoted && line[index + 1] === '"') {
+      current += '"';
+      index += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === ',' && !quoted) {
+      values.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  values.push(current);
+  return values;
 }
 
 function styleSheet(sheet) {
@@ -259,7 +393,18 @@ function normalizeProductCode(value) {
   return raw.replace(/\.0$/, '');
 }
 
+function normalizeCellText(value) {
+  if (value == null) return '';
+  if (typeof value === 'object') {
+    if (value.text != null) return String(value.text).trim();
+    if (Array.isArray(value.richText)) {
+      return value.richText.map((part) => part.text || '').join('').trim();
+    }
+    if (value.result != null) return String(value.result).trim();
+  }
+  return String(value).trim();
+}
+
 function timestamp() {
   return new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
 }
-

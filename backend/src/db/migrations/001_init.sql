@@ -107,7 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_conteos_usuario_estado ON conteos (usuario_id, es
 CREATE TABLE IF NOT EXISTS conteo_detalle (
   id BIGSERIAL PRIMARY KEY,
   conteo_id BIGINT NOT NULL REFERENCES conteos(id) ON DELETE CASCADE,
-  producto_id BIGINT NOT NULL REFERENCES productos(id),
+  producto_id BIGINT REFERENCES productos(id) ON DELETE SET NULL,
   codigo VARCHAR(80) NOT NULL,
   descripcion TEXT NOT NULL,
   cantidad NUMERIC(12, 2) NOT NULL DEFAULT 0,

@@ -187,14 +187,7 @@ webApi.get('/mi/productos', requireWebUser, requirePermission('count'), asyncHan
     res.json({ ok: true, productos: [] });
     return;
   }
-  const { rows } = await pool.query(
-    `SELECT id, codigo, descripcion
-     FROM productos
-     WHERE estado = TRUE AND (codigo ILIKE $1 OR descripcion ILIKE $2)
-     ORDER BY CASE WHEN codigo = $3 THEN 0 ELSE 1 END, descripcion, codigo
-     LIMIT 30`,
-    [`${q}%`, `%${q}%`, q]
-  );
+  const rows = await searchActiveProducts(q, 30);
   res.json({ ok: true, productos: rows });
 }));
 
@@ -222,14 +215,7 @@ webApi.post('/mi/conteos/:id/finalizar', requireWebUser, requirePermission('coun
 
 webApi.get('/productos', requireWebUser, asyncHandler(async (req, res) => {
   const q = String(req.query.q || '').trim();
-  const { rows } = await pool.query(
-    `SELECT id, codigo, descripcion, estado, fecha_creacion
-     FROM productos
-     WHERE ($1 = '' OR codigo ILIKE $2 OR descripcion ILIKE $3)
-     ORDER BY descripcion, codigo
-     LIMIT 200`,
-    [q, `${q}%`, `%${q}%`]
-  );
+  const rows = await searchActiveProducts(q, 200, { includeEmpty: true, includeMeta: true });
   res.json({ ok: true, productos: rows });
 }));
 
@@ -258,9 +244,14 @@ webApi.post('/productos/import', requireWebUser, requirePermission('admin'), upl
 }));
 
 webApi.patch('/productos/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const codigo = String(req.body.codigo || '').trim();
+  const descripcion = String(req.body.descripcion || '').trim();
+  if (!codigo || !descripcion) {
+    throw new AppError('Codigo y descripcion son requeridos', 422);
+  }
   const { rows } = await pool.query(
     'UPDATE productos SET codigo = $1, descripcion = $2, estado = $3 WHERE id = $4 RETURNING *',
-    [req.body.codigo, req.body.descripcion, Boolean(req.body.estado), req.params.id]
+    [codigo, descripcion, Boolean(req.body.estado), req.params.id]
   );
   if (!rows[0]) {
     throw new AppError('Producto no encontrado', 404);
@@ -269,7 +260,7 @@ webApi.patch('/productos/:id', requireWebUser, requirePermission('admin'), async
 }));
 
 webApi.delete('/productos/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
-  const { rows } = await pool.query('UPDATE productos SET estado = FALSE WHERE id = $1 RETURNING id', [req.params.id]);
+  const { rows } = await pool.query('DELETE FROM productos WHERE id = $1 RETURNING id', [req.params.id]);
   if (!rows[0]) {
     throw new AppError('Producto no encontrado', 404);
   }
@@ -660,6 +651,85 @@ function publicUser(user) {
     usuario: user.usuario,
     rol: user.rol
   };
+}
+
+async function searchActiveProducts(search, limit = 30, options = {}) {
+  const q = String(search || '').trim();
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 30, 500));
+  const select = options.includeMeta
+    ? 'id, codigo, descripcion, estado, fecha_creacion'
+    : 'id, codigo, descripcion';
+
+  if (!q) {
+    if (!options.includeEmpty) return [];
+    const { rows } = await pool.query(
+      `SELECT ${select}
+       FROM productos
+       WHERE estado = TRUE
+       ORDER BY descripcion, codigo
+       LIMIT $1`,
+      [safeLimit]
+    );
+    return rows;
+  }
+
+  const codePrefix = `${escapeLike(q)}%`;
+  const contains = `%${escapeLike(q)}%`;
+  const searchIsCode = /^\d+$/.test(q);
+
+  if (searchIsCode) {
+    const exact = await pool.query(
+      `SELECT ${select}
+       FROM productos
+       WHERE estado = TRUE AND codigo = $1
+       LIMIT 1`,
+      [q]
+    );
+    if (exact.rows.length) {
+      return exact.rows;
+    }
+
+    const { rows } = await pool.query(
+      `SELECT ${select}
+       FROM productos
+       WHERE estado = TRUE
+         AND (
+           codigo ILIKE $1 ESCAPE '\\'
+           OR descripcion ILIKE $2 ESCAPE '\\'
+           OR descripcion % $3
+         )
+       ORDER BY
+         CASE WHEN codigo ILIKE $1 ESCAPE '\\' THEN 0 ELSE 1 END,
+         similarity(descripcion, $3) DESC,
+         codigo
+       LIMIT $4`,
+      [codePrefix, contains, q, safeLimit]
+    );
+    return rows;
+  }
+
+  const { rows } = await pool.query(
+    `SELECT ${select}
+     FROM productos
+     WHERE estado = TRUE
+       AND (
+         codigo ILIKE $1 ESCAPE '\\'
+         OR descripcion ILIKE $2 ESCAPE '\\'
+         OR descripcion % $3
+       )
+     ORDER BY
+       CASE WHEN codigo ILIKE $1 ESCAPE '\\' THEN 0 ELSE 1 END,
+       similarity(descripcion, $3) DESC,
+       descripcion,
+       codigo
+     LIMIT $4`,
+    [codePrefix, contains, q, safeLimit]
+  );
+  return rows;
+}
+
+function escapeLike(value) {
+  return String(value).replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
 function normalizeIds(values) {
