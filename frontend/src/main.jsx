@@ -575,14 +575,29 @@ function Productos({ request }) {
   const [items, setItems] = useState([]);
   const [q, setQ] = useState('');
   const [form, setForm] = useState({ codigo: '', descripcion: '' });
+  const [editing, setEditing] = useState(null);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   const [importMessage, setImportMessage] = useState('');
   const load = () => request(`/productos?q=${encodeURIComponent(q)}`).then((data) => setItems(data.productos));
   useEffect(() => { load(); }, []);
   async function submit(event) {
     event.preventDefault();
-    await request('/productos', { method: 'POST', body: JSON.stringify(form) });
-    setForm({ codigo: '', descripcion: '' });
-    load();
+    setMessage('');
+    setError('');
+    try {
+      if (editing) {
+        await request(`/productos/${editing.id}`, { method: 'PATCH', body: JSON.stringify({ ...form, estado: editing.estado }) });
+        setMessage('Producto actualizado correctamente');
+      } else {
+        await request('/productos', { method: 'POST', body: JSON.stringify(form) });
+        setMessage('Producto guardado correctamente');
+      }
+      resetProductForm();
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
   }
   async function importFile(event) {
     const file = event.target.files?.[0];
@@ -595,12 +610,49 @@ function Productos({ request }) {
     load();
     event.target.value = '';
   }
+  function editProduct(product) {
+    setEditing(product);
+    setForm({ codigo: product.codigo || '', descripcion: product.descripcion || '' });
+    setMessage('');
+    setError('');
+  }
+  function resetProductForm() {
+    setEditing(null);
+    setForm({ codigo: '', descripcion: '' });
+  }
+  async function setProductStatus(product, estado) {
+    setMessage('');
+    setError('');
+    try {
+      await request(`/productos/${product.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ codigo: product.codigo, descripcion: product.descripcion, estado })
+      });
+      setMessage(estado ? 'Producto activado correctamente' : 'Producto desactivado correctamente');
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+  async function deleteProduct(product) {
+    setMessage('');
+    setError('');
+    try {
+      await request(`/productos/${product.id}`, { method: 'DELETE' });
+      setMessage('Producto eliminado correctamente');
+      if (editing?.id === product.id) resetProductForm();
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
   return (
     <Crud title="Productos" q={q} setQ={setQ} onSearch={load}>
       <form className="inline-form" onSubmit={submit}>
         <input placeholder="Codigo" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} />
         <input placeholder="Descripcion" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
-        <button className="primary">Guardar</button>
+        <button className="primary">{editing ? 'Actualizar' : 'Guardar'}</button>
+        {editing ? <button className="outline-action" type="button" onClick={resetProductForm}>Cancelar</button> : null}
       </form>
       <div className="file-action">
         <label className="file-label">
@@ -609,7 +661,22 @@ function Productos({ request }) {
         </label>
         {importMessage ? <span>{importMessage}</span> : null}
       </div>
-      <DataTable columns={['codigo', 'descripcion', 'estado']} rows={items} />
+      {message ? <p className="success">{message}</p> : null}
+      {error ? <p className="error">{error}</p> : null}
+      <DataTable
+        columns={['codigo', 'descripcion', 'estado', 'acciones']}
+        rows={items.map((item) => ({
+          ...item,
+          acciones: (
+            <RowActions
+              onEdit={() => editProduct(item)}
+              onToggle={() => setProductStatus(item, !item.estado)}
+              toggleLabel={item.estado ? 'Desactivar' : 'Activar'}
+              onDelete={() => deleteProduct(item)}
+            />
+          )
+        }))}
+      />
     </Crud>
   );
 }
@@ -617,21 +684,85 @@ function Productos({ request }) {
 function Agencias({ request }) {
   const [items, setItems] = useState([]);
   const [nombre, setNombre] = useState('');
+  const [editing, setEditing] = useState(null);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   const load = () => request('/agencias').then((data) => setItems(data.agencias));
   useEffect(() => { load(); }, []);
   async function submit(event) {
     event.preventDefault();
-    await request('/agencias', { method: 'POST', body: JSON.stringify({ nombre }) });
+    setMessage('');
+    setError('');
+    try {
+      if (editing) {
+        await request(`/agencias/${editing.id}`, { method: 'PATCH', body: JSON.stringify({ nombre, estado: editing.estado }) });
+        setMessage('Agencia actualizada correctamente');
+      } else {
+        await request('/agencias', { method: 'POST', body: JSON.stringify({ nombre }) });
+        setMessage('Agencia guardada correctamente');
+      }
+      resetAgencyForm();
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+  function editAgency(agency) {
+    setEditing(agency);
+    setNombre(agency.nombre || '');
+    setMessage('');
+    setError('');
+  }
+  function resetAgencyForm() {
+    setEditing(null);
     setNombre('');
-    load();
+  }
+  async function setAgencyStatus(agency, estado) {
+    setMessage('');
+    setError('');
+    try {
+      await request(`/agencias/${agency.id}`, { method: 'PATCH', body: JSON.stringify({ nombre: agency.nombre, estado }) });
+      setMessage(estado ? 'Agencia activada correctamente' : 'Agencia desactivada correctamente');
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+  async function deleteAgency(agency) {
+    setMessage('');
+    setError('');
+    try {
+      await request(`/agencias/${agency.id}`, { method: 'DELETE' });
+      setMessage('Agencia desactivada correctamente');
+      if (editing?.id === agency.id) resetAgencyForm();
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
   }
   return (
     <Panel>
       <form className="inline-form" onSubmit={submit}>
         <input placeholder="Nombre de agencia" value={nombre} onChange={(e) => setNombre(e.target.value)} />
-        <button className="primary">Guardar</button>
+        <button className="primary">{editing ? 'Actualizar' : 'Guardar'}</button>
+        {editing ? <button className="outline-action" type="button" onClick={resetAgencyForm}>Cancelar</button> : null}
       </form>
-      <DataTable columns={['nombre', 'estado']} rows={items} />
+      {message ? <p className="success">{message}</p> : null}
+      {error ? <p className="error">{error}</p> : null}
+      <DataTable
+        columns={['nombre', 'estado', 'acciones']}
+        rows={items.map((item) => ({
+          ...item,
+          acciones: (
+            <RowActions
+              onEdit={() => editAgency(item)}
+              onToggle={() => setAgencyStatus(item, !item.estado)}
+              toggleLabel={item.estado ? 'Desactivar' : 'Activar'}
+              onDelete={() => deleteAgency(item)}
+            />
+          )
+        }))}
+      />
     </Panel>
   );
 }
@@ -639,30 +770,110 @@ function Agencias({ request }) {
 function Usuarios({ request }) {
   const [items, setItems] = useState([]);
   const [form, setForm] = useState({ nombre: '', usuario: '', password: '', rol: 'usuario' });
+  const [editing, setEditing] = useState(null);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   const load = () => request('/usuarios').then((data) => setItems(data.usuarios));
   useEffect(() => { load(); }, []);
   async function submit(event) {
     event.preventDefault();
-    await request('/usuarios', { method: 'POST', body: JSON.stringify(form) });
+    setMessage('');
+    setError('');
+    try {
+      if (editing) {
+        await request(`/usuarios/${editing.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ ...form, estado: editing.estado })
+        });
+        setMessage('Usuario actualizado correctamente');
+      } else {
+        await request('/usuarios', { method: 'POST', body: JSON.stringify(form) });
+        setMessage('Usuario creado correctamente');
+      }
+      resetUserForm();
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+  function editUser(user) {
+    setEditing(user);
+    setForm({ nombre: user.nombre || '', usuario: user.usuario || '', password: '', rol: user.rol || 'usuario' });
+    setMessage('');
+    setError('');
+  }
+  function resetUserForm() {
+    setEditing(null);
     setForm({ nombre: '', usuario: '', password: '', rol: 'usuario' });
-    load();
+  }
+  async function setUserStatus(user, estado) {
+    setMessage('');
+    setError('');
+    try {
+      await request(`/usuarios/${user.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ nombre: user.nombre, usuario: user.usuario, password: '', rol: user.rol, estado })
+      });
+      setMessage(estado ? 'Usuario activado correctamente' : 'Usuario desactivado correctamente');
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+  async function deleteUser(user) {
+    setMessage('');
+    setError('');
+    try {
+      await request(`/usuarios/${user.id}`, { method: 'DELETE' });
+      setMessage('Usuario desactivado correctamente');
+      if (editing?.id === user.id) resetUserForm();
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
   }
   return (
     <Panel>
       <form className="inline-form" onSubmit={submit}>
         <input placeholder="Nombre" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
         <input placeholder="Usuario" value={form.usuario} onChange={(e) => setForm({ ...form, usuario: e.target.value })} />
-        <input placeholder="Contrasena" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+        <input placeholder={editing ? 'Nueva contrasena opcional' : 'Contrasena'} type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
         <select value={form.rol} onChange={(e) => setForm({ ...form, rol: e.target.value })}>
           <option value="admin">admin</option>
           <option value="supervisor">supervisor</option>
           <option value="reportes">reportes</option>
           <option value="usuario">usuario</option>
         </select>
-        <button className="primary">Crear</button>
+        <button className="primary">{editing ? 'Actualizar' : 'Crear'}</button>
+        {editing ? <button className="outline-action" type="button" onClick={resetUserForm}>Cancelar</button> : null}
       </form>
-      <DataTable columns={['nombre', 'usuario', 'rol', 'estado']} rows={items} />
+      {message ? <p className="success">{message}</p> : null}
+      {error ? <p className="error">{error}</p> : null}
+      <DataTable
+        columns={['nombre', 'usuario', 'rol', 'estado', 'acciones']}
+        rows={items.map((item) => ({
+          ...item,
+          acciones: (
+            <RowActions
+              onEdit={() => editUser(item)}
+              onToggle={() => setUserStatus(item, !item.estado)}
+              toggleLabel={item.estado ? 'Desactivar' : 'Activar'}
+              onDelete={() => deleteUser(item)}
+            />
+          )
+        }))}
+      />
     </Panel>
+  );
+}
+
+function RowActions({ onEdit, onToggle, toggleLabel, onDelete }) {
+  return (
+    <div className="row-actions">
+      <button className="table-btn" type="button" onClick={onEdit}>Editar</button>
+      <button className="outline-action compact" type="button" onClick={onToggle}>{toggleLabel}</button>
+      <button className="danger-action compact" type="button" onClick={onDelete}>Eliminar</button>
+    </div>
   );
 }
 

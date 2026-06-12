@@ -448,6 +448,17 @@ h1 {
   color: #b42318;
 }
 
+.compact {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .latest-panel {
   padding: 16px;
 }
@@ -679,7 +690,7 @@ th {
 }
 
 .error {
-  margin: 0;
+  margin: 0 0 12px;
   color: #b42318;
   background: #fef3f2;
   border: 1px solid #fecdca;
@@ -688,7 +699,7 @@ th {
 }
 
 .success {
-  margin: 0;
+  margin: 0 0 12px;
   color: #027a48;
   background: #ecfdf3;
   border: 1px solid #abefc6;
