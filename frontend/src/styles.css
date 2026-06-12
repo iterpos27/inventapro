@@ -690,6 +690,7 @@ h1 {
 }
 
 .edit-text-btn,
+.toggle-text-btn,
 .delete-text-btn {
   display: inline-flex;
   align-items: center;
@@ -708,10 +709,25 @@ h1 {
   color: #ffffff;
 }
 
+.toggle-text-btn {
+  border: 1px solid #2563a7;
+  background: #ffffff;
+  color: #003a70;
+}
+
 .delete-text-btn {
   border: 1px solid #ff365d;
   background: #ffffff;
   color: #ff365d;
+}
+
+.agencies-table th:last-child,
+.agencies-table td:last-child {
+  text-align: right;
+}
+
+.agencies-table td:last-child .text-actions {
+  justify-content: flex-end;
 }
 
 .searchbar,

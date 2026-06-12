@@ -720,7 +720,7 @@ function Productos({ request }) {
 
 function Agencias({ request }) {
   const [items, setItems] = useState([]);
-  const [nombre, setNombre] = useState('');
+  const [form, setForm] = useState({ nombre: '', estado: true });
   const [editing, setEditing] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [message, setMessage] = useState('');
@@ -733,10 +733,10 @@ function Agencias({ request }) {
     setError('');
     try {
       if (editing) {
-        await request(`/agencias/${editing.id}`, { method: 'PATCH', body: JSON.stringify({ nombre, estado: editing.estado }) });
+        await request(`/agencias/${editing.id}`, { method: 'PATCH', body: JSON.stringify(form) });
         setMessage('Agencia actualizada correctamente');
       } else {
-        await request('/agencias', { method: 'POST', body: JSON.stringify({ nombre }) });
+        await request('/agencias', { method: 'POST', body: JSON.stringify({ nombre: form.nombre }) });
         setMessage('Agencia guardada correctamente');
       }
       resetAgencyForm();
@@ -747,14 +747,14 @@ function Agencias({ request }) {
   }
   function editAgency(agency) {
     setEditing(agency);
-    setNombre(agency.nombre || '');
+    setForm({ nombre: agency.nombre || '', estado: Boolean(agency.estado) });
     setModalOpen(true);
     setMessage('');
     setError('');
   }
   function resetAgencyForm() {
     setEditing(null);
-    setNombre('');
+    setForm({ nombre: '', estado: true });
     setModalOpen(false);
   }
   async function setAgencyStatus(agency, estado) {
@@ -781,35 +781,86 @@ function Agencias({ request }) {
     }
   }
   return (
-    <Panel>
-      <div className="toolbar-actions">
-        <IconAction label="Crear agencia" icon={Plus} variant="primary" onClick={() => { resetAgencyForm(); setModalOpen(true); }} />
+    <div className="users-page">
+      <div className="admin-page-heading">
+        <div>
+          <p>ADMINISTRACION</p>
+          <h2>Agencias</h2>
+        </div>
+        <button className="primary admin-create-btn" type="button" onClick={() => { resetAgencyForm(); setModalOpen(true); }}>
+          <Building2 size={16} />
+          Crear agencia
+        </button>
       </div>
       {message ? <p className="success">{message}</p> : null}
       {error ? <p className="error">{error}</p> : null}
-      <DataTable
-        columns={['nombre', 'estado', 'acciones']}
-        rows={items.map((item) => ({
-          ...item,
-          acciones: (
-            <RowActions
-              onEdit={() => editAgency(item)}
-              onToggle={() => setAgencyStatus(item, !item.estado)}
-              toggleLabel={item.estado ? 'Desactivar' : 'Activar'}
-              onDelete={() => deleteAgency(item)}
-            />
-          )
-        }))}
-      />
+      <section className="panel users-card">
+        <h3>Agencias registradas</h3>
+        <div className="table-wrap">
+          <table className="admin-table users-table agencies-table">
+            <thead>
+              <tr>
+                <th>Agencia</th>
+                <th>Estado</th>
+                <th>Creacion</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.nombre}</td>
+                  <td><span className={`status-badge ${item.estado ? 'active' : 'inactive'}`}>{item.estado ? 'Activo' : 'Inactivo'}</span></td>
+                  <td>{formatDateTime(item.fecha_creacion)}</td>
+                  <td>
+                    <div className="text-actions">
+                      <button className="edit-text-btn" type="button" onClick={() => editAgency(item)}>
+                        <Edit3 size={15} />
+                        Editar
+                      </button>
+                      <button className="toggle-text-btn" type="button" onClick={() => setAgencyStatus(item, !item.estado)}>
+                        {item.estado ? 'Desactivar' : 'Activar'}
+                      </button>
+                      <button className="delete-text-btn" type="button" onClick={() => deleteAgency(item)}>
+                        <Trash2 size={15} />
+                        Eliminar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
       {modalOpen ? (
         <Modal title={editing ? 'Editar agencia' : 'Crear agencia'} onClose={resetAgencyForm}>
-          <form className="modal-form" onSubmit={submit}>
-            <input placeholder="Nombre de agencia" value={nombre} onChange={(e) => setNombre(e.target.value)} />
-            <IconAction label={editing ? 'Actualizar agencia' : 'Guardar agencia'} icon={Save} variant="primary" type="submit" />
+          <form className="modal-form user-modal-form" onSubmit={submit}>
+            <label>
+              {editing ? 'Nombre' : 'Nombre de agencia'}
+              <input
+                placeholder={editing ? '' : 'PORTOVIEJO 01'}
+                value={form.nombre}
+                onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+              />
+            </label>
+            {editing ? (
+              <label>
+                Estado
+                <select value={form.estado ? '1' : '0'} onChange={(e) => setForm({ ...form, estado: e.target.value === '1' })}>
+                  <option value="1">Activa</option>
+                  <option value="0">Inactiva</option>
+                </select>
+              </label>
+            ) : null}
+            <footer className="modal-actions">
+              <button className="outline-action" type="button" onClick={resetAgencyForm}>Cancelar</button>
+              <button className="primary" type="submit">{editing ? 'Guardar cambios' : 'Crear'}</button>
+            </footer>
           </form>
         </Modal>
       ) : null}
-    </Panel>
+    </div>
   );
 }
 
