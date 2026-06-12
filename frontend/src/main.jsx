@@ -6,7 +6,6 @@ import {
   Building2,
   CheckCircle,
   ChevronDown,
-  ClipboardCheck,
   ClipboardList,
   Download,
   Edit3,
@@ -73,18 +72,17 @@ async function downloadFile(token, path) {
 
 const nav = [
   { id: 'dashboard', label: 'Dashboard', icon: Gauge, group: 'main' },
-  { id: 'mi_conteo', label: 'Conteo y Borradores', icon: ClipboardList, group: 'main', permissions: ['count'] },
+  { id: 'conteo_borradores', label: 'Conteo y Borradores', icon: ClipboardList, group: 'main' },
   { id: 'conteos', label: 'Reportes', icon: FileText, group: 'main' },
   { id: 'productos', label: 'Productos', icon: Boxes, group: 'main' },
   { id: 'usuarios', label: 'Usuarios', icon: Users, group: 'Administracion' },
-  { id: 'agencias', label: 'Agencias', icon: Building2, group: 'Administracion' },
-  { id: 'tomas', label: 'Configuracion del sistema', icon: ClipboardCheck, group: 'Administracion' }
+  { id: 'agencias', label: 'Agencias', icon: Building2, group: 'Administracion' }
 ];
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('inventapro_token') || '');
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('inventapro_user') || 'null'));
-  const [route, setRoute] = useState(user?.rol === 'usuario' ? 'mi_conteo' : 'dashboard');
+  const [route, setRoute] = useState(user?.rol === 'usuario' || user?.rol === 'operador' ? 'conteo_borradores' : 'dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
@@ -93,7 +91,7 @@ function App() {
 
   useEffect(() => {
     if (user && !navForUser(user).some((item) => item.id === route)) {
-      setRoute(user.rol === 'usuario' ? 'mi_conteo' : 'dashboard');
+      setRoute(user.rol === 'usuario' || user.rol === 'operador' ? 'conteo_borradores' : 'dashboard');
     }
   }, [route, user]);
 
@@ -102,7 +100,7 @@ function App() {
     localStorage.setItem('inventapro_user', JSON.stringify(session.user));
     setToken(session.token);
     setUser(session.user);
-    setRoute(session.user.rol === 'usuario' || session.user.rol === 'operador' ? 'mi_conteo' : 'dashboard');
+    setRoute(session.user.rol === 'usuario' || session.user.rol === 'operador' ? 'conteo_borradores' : 'dashboard');
   }
 
   function logout() {
@@ -117,10 +115,9 @@ function App() {
   }
 
   const Current = {
-    mi_conteo: MiConteo,
+    conteo_borradores: user?.rol === 'usuario' || user?.rol === 'operador' ? MiConteo : Tomas,
     dashboard: Dashboard,
     productos: Productos,
-    tomas: Tomas,
     conteos: Conteos,
     agencias: Agencias,
     usuarios: Usuarios
@@ -164,9 +161,9 @@ function App() {
 }
 
 function navForUser(user) {
-  if (!user) return nav.filter((item) => item.id !== 'mi_conteo');
+  if (!user) return nav;
   if (user.rol === 'usuario' || user.rol === 'operador') {
-    return nav.filter((item) => item.id === 'mi_conteo');
+    return nav.filter((item) => item.id === 'conteo_borradores');
   }
   return nav;
 }

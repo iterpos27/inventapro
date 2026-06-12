@@ -35,15 +35,36 @@ const upload = multer({
 webApi.post('/auth/login', asyncHandler(async (req, res) => {
   const usuario = String(req.body.usuario || '').trim();
   const password = String(req.body.password || '');
+  const ip = req.ip || '0.0.0.0';
+  if (!usuario || !password) {
+    throw new AppError('Ingrese usuario y contrasena', 422);
+  }
+
+  const attempt = await pool.query('SELECT intentos, bloqueado_hasta FROM login_attempts WHERE usuario = $1 AND ip = $2', [usuario, ip]);
+  if (attempt.rows[0]?.bloqueado_hasta && new Date(attempt.rows[0].bloqueado_hasta) > new Date()) {
+    throw new AppError('Demasiados intentos. Espere 15 minutos.', 429);
+  }
+
   const { rows } = await pool.query(
     'SELECT id, nombre, usuario, password, rol FROM usuarios WHERE usuario = $1 AND estado = TRUE LIMIT 1',
     [usuario]
   );
   const user = rows[0];
   if (!user || !(await bcrypt.compare(password, user.password))) {
+    await pool.query(
+      `INSERT INTO login_attempts (usuario, ip, intentos, ultimo_intento)
+       VALUES ($1, $2, 1, NOW())
+       ON CONFLICT (usuario, ip)
+       DO UPDATE SET
+         intentos = login_attempts.intentos + 1,
+         bloqueado_hasta = CASE WHEN login_attempts.intentos + 1 >= 5 THEN NOW() + INTERVAL '15 minutes' ELSE login_attempts.bloqueado_hasta END,
+         ultimo_intento = NOW()`,
+      [usuario, ip]
+    );
     throw new AppError('Usuario o contrasena incorrectos', 401);
   }
   const token = jwt.sign({ sub: user.id, rol: user.rol }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+  await pool.query('DELETE FROM login_attempts WHERE usuario = $1 AND ip = $2', [usuario, ip]);
   res.json({ ok: true, token, user: publicUser(user) });
 }));
 
