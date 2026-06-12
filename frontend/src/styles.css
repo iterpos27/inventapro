@@ -730,6 +730,83 @@ h1 {
   justify-content: flex-end;
 }
 
+.reports-page {
+  display: grid;
+  gap: 24px;
+}
+
+.report-card {
+  padding: 16px;
+}
+
+.report-card h3 {
+  margin: 0 0 14px;
+  color: #003a70;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.report-filter {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 328px);
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+
+.report-filter button {
+  min-height: 38px;
+  border-radius: 6px;
+  font-weight: 900;
+}
+
+.report-table td {
+  padding: 14px 12px;
+}
+
+.report-table th:not(:first-child),
+.report-table td:not(:first-child) {
+  text-align: center;
+}
+
+.report-table .empty-table {
+  height: 68px;
+  color: #667085;
+  text-align: center;
+}
+
+.export-table td:first-child {
+  color: #000000;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.5;
+}
+
+.export-table td:first-child span {
+  display: block;
+}
+
+.report-status {
+  display: inline-grid;
+  place-items: center;
+  min-width: 52px;
+  min-height: 22px;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.report-status.open {
+  background: #facc15;
+  color: #111827;
+}
+
+.report-status.done {
+  background: #16a34a;
+  color: #ffffff;
+}
+
 .searchbar,
 .inline-form,
 .file-action {
@@ -1422,6 +1499,10 @@ th {
   }
 
   .file-action {
+    grid-template-columns: 1fr;
+  }
+
+  .report-filter {
     grid-template-columns: 1fr;
   }
 

@@ -1431,19 +1431,120 @@ function defaultTomaForm() {
 
 function Conteos({ request, token }) {
   const [items, setItems] = useState([]);
+  const [from, setFrom] = useState(defaultReportRange().from);
+  const [to, setTo] = useState(defaultReportRange().to);
   useEffect(() => { request('/conteos').then((data) => setItems(data.conteos)); }, [request]);
+  const filtered = useMemo(() => items.filter((item) => isWithinRange(item.fecha_inicio || item.fecha_finalizacion, from, to)), [items, from, to]);
+  const dailyRows = useMemo(() => buildDailyReport(filtered), [filtered]);
+  const tomaRows = useMemo(() => buildTomaReport(items), [items]);
+
   return (
-    <Panel>
-      <DataTable
-        columns={['numero_toma', 'usuario_nombre', 'estado', 'version', 'fecha_inicio', 'fecha_finalizacion', 'acciones']}
-        rows={items.map((item) => ({
-          ...item,
-          acciones: item.estado === 'finalizado'
-            ? <button className="table-btn" onClick={() => downloadFile(token, `/conteos/${item.id}/excel`)}>Excel</button>
-            : '-'
-        }))}
-      />
-    </Panel>
+    <div className="users-page reports-page">
+      <div className="admin-page-heading">
+        <div>
+          <p>AUDITORIA</p>
+          <h2>Reportes</h2>
+        </div>
+      </div>
+
+      <section className="panel users-card report-card">
+        <h3>Reporte por rango de fechas</h3>
+        <div className="report-filter">
+          <label>
+            Desde
+            <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+          </label>
+          <label>
+            Hasta
+            <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+          </label>
+          <button className="primary" type="button">
+            <Search size={18} />
+            Consultar
+          </button>
+        </div>
+        <div className="table-wrap">
+          <table className="admin-table users-table report-table">
+            <thead>
+              <tr>
+                <th>Dia</th>
+                <th>Conteos</th>
+                <th>Borradores</th>
+                <th>Finalizados</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dailyRows.length ? dailyRows.map((row) => (
+                <tr key={row.day}>
+                  <td>{formatDateOnly(row.day)}</td>
+                  <td>{row.total}</td>
+                  <td>{row.drafts}</td>
+                  <td>{row.finished}</td>
+                </tr>
+              )) : (
+                <tr>
+                  <td className="empty-table" colSpan="4">Sin movimientos para el rango seleccionado.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel users-card report-card">
+        <h3>Exportaciones por toma fisica</h3>
+        <div className="table-wrap">
+          <table className="admin-table users-table report-table export-table">
+            <thead>
+              <tr>
+                <th>Toma fisica</th>
+                <th>Estado</th>
+                <th>Usuarios</th>
+                <th>Finalizados</th>
+                <th>Fin</th>
+                <th>Excel</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {tomaRows.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <strong>TOMA FISICA # {row.numero_toma || '-'}</strong>
+                    <span>AGENCIA: {row.agencia || ''}</span>
+                    <span>{row.nombre_toma}</span>
+                  </td>
+                  <td><span className={`report-status ${row.status}`}>{row.statusLabel}</span></td>
+                  <td>{row.total}</td>
+                  <td>{row.finished}</td>
+                  <td>{formatDateTime(row.finishedAt)}</td>
+                  <td>
+                    {row.excelId ? (
+                      <button className="link-action compact" type="button" onClick={() => downloadFile(token, `/conteos/${row.excelId}/excel`)}>Excel</button>
+                    ) : 'Pendiente'}
+                  </td>
+                  <td>
+                    <button
+                      className="outline-action compact"
+                      type="button"
+                      disabled={!row.excelId}
+                      onClick={() => row.excelId && downloadFile(token, `/conteos/${row.excelId}/excel`)}
+                    >
+                      Ver detalle
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {tomaRows.length === 0 ? (
+                <tr>
+                  <td className="empty-table" colSpan="7">No hay tomas fisicas para exportar.</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -1523,6 +1624,78 @@ function formatShortPeriod(toma) {
   const start = `${String(toma.fecha_habilitacion || '').slice(0, 10)} ${String(toma.hora_inicio || '').slice(0, 5)}`.trim();
   const end = `${String(toma.fecha_cierre || '').slice(0, 10)} ${String(toma.hora_fin || '').slice(0, 5)}`.trim();
   return `${start} / ${end}`;
+}
+
+function defaultReportRange() {
+  const today = new Date();
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+  return {
+    from: firstDay.toISOString().slice(0, 10),
+    to: today.toISOString().slice(0, 10)
+  };
+}
+
+function isWithinRange(value, from, to) {
+  if (!value) return false;
+  const day = String(value).slice(0, 10);
+  return (!from || day >= from) && (!to || day <= to);
+}
+
+function buildDailyReport(items) {
+  const days = new Map();
+  for (const item of items) {
+    const day = String(item.fecha_inicio || item.fecha_finalizacion || '').slice(0, 10);
+    if (!day) continue;
+    const current = days.get(day) || { day, total: 0, drafts: 0, finished: 0 };
+    current.total += 1;
+    if (item.estado === 'finalizado') current.finished += 1;
+    else current.drafts += 1;
+    days.set(day, current);
+  }
+  return [...days.values()].sort((a, b) => a.day.localeCompare(b.day));
+}
+
+function buildTomaReport(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = item.toma_id || item.numero_toma || item.id;
+    const current = groups.get(key) || {
+      id: key,
+      numero_toma: item.numero_toma,
+      nombre_toma: item.nombre_toma || '',
+      agencia: parseAgencyFromTomaName(item.nombre_toma),
+      total: 0,
+      finished: 0,
+      status: 'open',
+      statusLabel: 'abierta',
+      excelId: null,
+      finishedAt: null
+    };
+    current.total += 1;
+    if (item.estado === 'finalizado') {
+      current.finished += 1;
+      current.excelId = current.excelId || item.id;
+      current.finishedAt = item.fecha_finalizacion || current.finishedAt;
+    }
+    groups.set(key, current);
+  }
+  return [...groups.values()].map((group) => ({
+    ...group,
+    status: group.finished > 0 && group.finished === group.total ? 'done' : 'open',
+    statusLabel: group.finished > 0 && group.finished === group.total ? 'finalizada' : 'abierta'
+  }));
+}
+
+function parseAgencyFromTomaName(value) {
+  const match = String(value || '').match(/AGENCIA:\s*([^\n\r]*)/i);
+  return match?.[1]?.trim() || '';
+}
+
+function formatDateOnly(value) {
+  if (!value) return '-';
+  const [year, month, day] = String(value).slice(0, 10).split('-');
+  if (!year || !month || !day) return String(value);
+  return `${day}/${month}/${year}`;
 }
 
 createRoot(document.getElementById('root')).render(<App />);
