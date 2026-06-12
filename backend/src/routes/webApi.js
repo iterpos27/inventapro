@@ -215,8 +215,12 @@ webApi.post('/mi/conteos/:id/finalizar', requireWebUser, requirePermission('coun
 
 webApi.get('/productos', requireWebUser, asyncHandler(async (req, res) => {
   const q = String(req.query.q || '').trim();
-  const rows = await searchActiveProducts(q, 200, { includeEmpty: true, includeMeta: true });
-  res.json({ ok: true, productos: rows });
+  const page = Math.max(1, Number(req.query.page || 1));
+  const perPage = Math.max(1, Math.min(Number(req.query.perPage || 30), 30));
+  const sort = ['codigo', 'descripcion'].includes(String(req.query.sort || '')) ? String(req.query.sort) : 'codigo';
+  const direction = String(req.query.direction || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc';
+  const result = await listProducts({ q, page, perPage, sort, direction });
+  res.json({ ok: true, ...result });
 }));
 
 webApi.post('/productos', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
@@ -653,6 +657,37 @@ function publicUser(user) {
   };
 }
 
+async function listProducts({ q = '', page = 1, perPage = 30, sort = 'codigo', direction = 'asc' }) {
+  const filter = productSearchFilter(q);
+  const count = await pool.query(`SELECT COUNT(*)::int AS total FROM productos WHERE ${filter.where}`, filter.params);
+  const total = Number(count.rows[0]?.total || 0);
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const orderColumn = sort === 'descripcion' ? 'descripcion' : 'codigo';
+  const orderDirection = direction === 'desc' ? 'DESC' : 'ASC';
+  const orderClause = orderColumn === 'descripcion'
+    ? `descripcion ${orderDirection}, codigo ASC`
+    : `CASE WHEN codigo ~ '^\\d{1,30}$' THEN codigo::numeric END ${orderDirection} NULLS LAST, codigo ${orderDirection}`;
+  const params = [...filter.params, perPage, (currentPage - 1) * perPage];
+  const { rows } = await pool.query(
+    `SELECT id, codigo, descripcion, estado, fecha_creacion
+     FROM productos
+     WHERE ${filter.where}
+     ORDER BY ${orderClause}, id ASC
+     LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params
+  );
+  return {
+    productos: rows,
+    total,
+    page: currentPage,
+    totalPages,
+    perPage,
+    sort,
+    direction
+  };
+}
+
 async function searchActiveProducts(search, limit = 30, options = {}) {
   const q = String(search || '').trim();
   const safeLimit = Math.max(1, Math.min(Number(limit) || 30, 500));
@@ -730,6 +765,25 @@ async function searchActiveProducts(search, limit = 30, options = {}) {
 
 function escapeLike(value) {
   return String(value).replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+function productSearchFilter(search) {
+  const q = String(search || '').trim();
+  if (!q) {
+    return { where: 'estado = TRUE', params: [] };
+  }
+  const codePrefix = `${escapeLike(q)}%`;
+  const contains = `%${escapeLike(q)}%`;
+  if (/^\d+$/.test(q)) {
+    return {
+      where: "(estado = TRUE AND (codigo ILIKE $1 ESCAPE '\\' OR descripcion ILIKE $2 ESCAPE '\\' OR descripcion % $3))",
+      params: [codePrefix, contains, q]
+    };
+  }
+  return {
+    where: "(estado = TRUE AND (codigo ILIKE $1 ESCAPE '\\' OR descripcion ILIKE $2 ESCAPE '\\' OR descripcion % $3))",
+    params: [codePrefix, contains, q]
+  };
 }
 
 function normalizeIds(values) {

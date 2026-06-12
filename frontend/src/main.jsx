@@ -2,10 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   AlertTriangle,
+  ArrowUpDown,
   Boxes,
   Building2,
   CheckCircle,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   Download,
   Edit3,
@@ -632,14 +635,41 @@ function Modal({ title, children, onClose, size = 'md' }) {
 function Productos({ request }) {
   const [items, setItems] = useState([]);
   const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [sort, setSort] = useState('codigo');
+  const [direction, setDirection] = useState('asc');
   const [form, setForm] = useState({ codigo: '', descripcion: '' });
   const [editing, setEditing] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [importMessage, setImportMessage] = useState('');
-  const load = () => request(`/productos?q=${encodeURIComponent(q)}`).then((data) => setItems(data.productos));
-  useEffect(() => { load(); }, []);
+  const load = (overrides = {}) => {
+    const nextPage = overrides.page ?? page;
+    const nextSort = overrides.sort ?? sort;
+    const nextDirection = overrides.direction ?? direction;
+    return request(`/productos?q=${encodeURIComponent(q)}&page=${nextPage}&perPage=30&sort=${nextSort}&direction=${nextDirection}`).then((data) => {
+      setItems(data.productos);
+      setTotal(Number(data.total || 0));
+      setPage(Number(data.page || nextPage));
+      setTotalPages(Number(data.totalPages || 1));
+      setSort(data.sort || nextSort);
+      setDirection(data.direction || nextDirection);
+    });
+  };
+  useEffect(() => { load({ page: 1, sort: 'codigo', direction: 'asc' }); }, []);
+  function searchProducts() {
+    load({ page: 1 });
+  }
+  function sortProducts(column) {
+    const nextDirection = sort === column && direction === 'asc' ? 'desc' : 'asc';
+    load({ page: 1, sort: column, direction: nextDirection });
+  }
+  function goToPage(nextPage) {
+    load({ page: Math.max(1, Math.min(nextPage, totalPages)) });
+  }
   async function submit(event) {
     event.preventDefault();
     setMessage('');
@@ -671,7 +701,7 @@ function Productos({ request }) {
       const text = `Importados ${info.procesados}: ${info.insertados} nuevos, ${info.actualizados} actualizados, ${info.omitidos} omitidos.`;
       setImportMessage(text);
       setMessage(text);
-      load();
+      load({ page: 1, sort: 'codigo', direction: 'asc' });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -730,9 +760,9 @@ function Productos({ request }) {
               placeholder="Codigo o descripcion"
               value={q}
               onChange={(event) => setQ(event.target.value)}
-              onKeyDown={(event) => event.key === 'Enter' && load()}
+              onKeyDown={(event) => event.key === 'Enter' && searchProducts()}
             />
-            <button className="primary" type="button" onClick={load}>
+            <button className="primary" type="button" onClick={searchProducts}>
               <Search size={18} />
               Buscar
             </button>
@@ -742,14 +772,24 @@ function Productos({ request }) {
       <section className="panel users-card product-table-card">
         <div className="product-table-title">
           <h3>Inventario</h3>
-          <span>{items.length} productos</span>
+          <span>{total} productos</span>
         </div>
         <div className="table-wrap">
           <table className="admin-table users-table products-table">
             <thead>
               <tr>
-                <th>Codigo</th>
-                <th>Descripcion</th>
+                <th>
+                  <button className="sort-header" type="button" onClick={() => sortProducts('codigo')}>
+                    Codigo
+                    <ArrowUpDown size={14} />
+                  </button>
+                </th>
+                <th>
+                  <button className="sort-header" type="button" onClick={() => sortProducts('descripcion')}>
+                    Descripcion
+                    <ArrowUpDown size={14} />
+                  </button>
+                </th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -780,6 +820,19 @@ function Productos({ request }) {
             </tbody>
           </table>
         </div>
+        <footer className="pagination-bar">
+          <strong>Pagina {page} de {totalPages}</strong>
+          <div>
+            <button className="outline-action compact" type="button" disabled={page <= 1} onClick={() => goToPage(page - 1)}>
+              <ChevronLeft size={15} />
+              Anterior
+            </button>
+            <button className="outline-action compact" type="button" disabled={page >= totalPages} onClick={() => goToPage(page + 1)}>
+              Siguiente
+              <ChevronRight size={15} />
+            </button>
+          </div>
+        </footer>
         {importMessage ? <p className="muted product-import-summary">{importMessage}</p> : null}
       </section>
       {modalOpen ? (

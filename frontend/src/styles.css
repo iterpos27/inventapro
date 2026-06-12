@@ -809,6 +809,24 @@ h1 {
   justify-content: flex-end;
 }
 
+.sort-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sort-header svg {
+  flex: 0 0 auto;
+  opacity: 0.8;
+}
+
 .products-table td:first-child {
   width: 84px;
   font-weight: 700;
@@ -816,6 +834,37 @@ h1 {
 
 .products-table td:nth-child(2) {
   font-size: 13px;
+}
+
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px 0 0;
+  border-top: 1px solid #d1e2f5;
+  color: #31577f;
+  font-size: 14px;
+}
+
+.pagination-bar div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.pagination-bar .compact {
+  min-height: 34px;
+  border-radius: 5px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.pagination-bar .compact:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .reports-page {
@@ -1695,6 +1744,16 @@ th {
 
   .product-search-row {
     grid-template-columns: 1fr;
+  }
+
+  .pagination-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pagination-bar div,
+  .pagination-bar .compact {
+    width: 100%;
   }
 
   .toma-card,
