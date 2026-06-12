@@ -7,6 +7,9 @@ import {
   ChevronDown,
   ClipboardCheck,
   ClipboardList,
+  Download,
+  Edit3,
+  Eye,
   FileText,
   Gauge,
   LayoutDashboard,
@@ -14,11 +17,14 @@ import {
   Menu,
   PackageSearch,
   Plus,
+  Power,
+  RefreshCcw,
   Save,
   Search,
   Settings,
   Trash2,
   UserCircle,
+  UserPlus,
   Users,
   X
 } from 'lucide-react';
@@ -571,11 +577,34 @@ function DonutCard({ title, percent, color, rows }) {
   );
 }
 
+function IconAction({ label, icon: Icon, variant = 'plain', onClick, type = 'button', disabled = false }) {
+  return (
+    <button className={`icon-action ${variant}`} type={type} onClick={onClick} aria-label={label} title={label} disabled={disabled}>
+      <Icon size={17} />
+    </button>
+  );
+}
+
+function Modal({ title, children, onClose }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-panel" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
+        <header className="modal-header">
+          <h2>{title}</h2>
+          <IconAction label="Cerrar" icon={X} onClick={onClose} />
+        </header>
+        {children}
+      </section>
+    </div>
+  );
+}
+
 function Productos({ request }) {
   const [items, setItems] = useState([]);
   const [q, setQ] = useState('');
   const [form, setForm] = useState({ codigo: '', descripcion: '' });
   const [editing, setEditing] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [importMessage, setImportMessage] = useState('');
@@ -613,12 +642,14 @@ function Productos({ request }) {
   function editProduct(product) {
     setEditing(product);
     setForm({ codigo: product.codigo || '', descripcion: product.descripcion || '' });
+    setModalOpen(true);
     setMessage('');
     setError('');
   }
   function resetProductForm() {
     setEditing(null);
     setForm({ codigo: '', descripcion: '' });
+    setModalOpen(false);
   }
   async function setProductStatus(product, estado) {
     setMessage('');
@@ -648,12 +679,9 @@ function Productos({ request }) {
   }
   return (
     <Crud title="Productos" q={q} setQ={setQ} onSearch={load}>
-      <form className="inline-form" onSubmit={submit}>
-        <input placeholder="Codigo" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} />
-        <input placeholder="Descripcion" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
-        <button className="primary">{editing ? 'Actualizar' : 'Guardar'}</button>
-        {editing ? <button className="outline-action" type="button" onClick={resetProductForm}>Cancelar</button> : null}
-      </form>
+      <div className="toolbar-actions">
+        <IconAction label="Crear producto" icon={Plus} variant="primary" onClick={() => { resetProductForm(); setModalOpen(true); }} />
+      </div>
       <div className="file-action">
         <label className="file-label">
           Importar productos
@@ -677,6 +705,15 @@ function Productos({ request }) {
           )
         }))}
       />
+      {modalOpen ? (
+        <Modal title={editing ? 'Editar producto' : 'Crear producto'} onClose={resetProductForm}>
+          <form className="modal-form" onSubmit={submit}>
+            <input placeholder="Codigo" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} />
+            <input placeholder="Descripcion" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
+            <IconAction label={editing ? 'Actualizar producto' : 'Guardar producto'} icon={Save} variant="primary" type="submit" />
+          </form>
+        </Modal>
+      ) : null}
     </Crud>
   );
 }
@@ -685,6 +722,7 @@ function Agencias({ request }) {
   const [items, setItems] = useState([]);
   const [nombre, setNombre] = useState('');
   const [editing, setEditing] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const load = () => request('/agencias').then((data) => setItems(data.agencias));
@@ -710,12 +748,14 @@ function Agencias({ request }) {
   function editAgency(agency) {
     setEditing(agency);
     setNombre(agency.nombre || '');
+    setModalOpen(true);
     setMessage('');
     setError('');
   }
   function resetAgencyForm() {
     setEditing(null);
     setNombre('');
+    setModalOpen(false);
   }
   async function setAgencyStatus(agency, estado) {
     setMessage('');
@@ -742,11 +782,9 @@ function Agencias({ request }) {
   }
   return (
     <Panel>
-      <form className="inline-form" onSubmit={submit}>
-        <input placeholder="Nombre de agencia" value={nombre} onChange={(e) => setNombre(e.target.value)} />
-        <button className="primary">{editing ? 'Actualizar' : 'Guardar'}</button>
-        {editing ? <button className="outline-action" type="button" onClick={resetAgencyForm}>Cancelar</button> : null}
-      </form>
+      <div className="toolbar-actions">
+        <IconAction label="Crear agencia" icon={Plus} variant="primary" onClick={() => { resetAgencyForm(); setModalOpen(true); }} />
+      </div>
       {message ? <p className="success">{message}</p> : null}
       {error ? <p className="error">{error}</p> : null}
       <DataTable
@@ -763,6 +801,14 @@ function Agencias({ request }) {
           )
         }))}
       />
+      {modalOpen ? (
+        <Modal title={editing ? 'Editar agencia' : 'Crear agencia'} onClose={resetAgencyForm}>
+          <form className="modal-form" onSubmit={submit}>
+            <input placeholder="Nombre de agencia" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+            <IconAction label={editing ? 'Actualizar agencia' : 'Guardar agencia'} icon={Save} variant="primary" type="submit" />
+          </form>
+        </Modal>
+      ) : null}
     </Panel>
   );
 }
@@ -771,6 +817,7 @@ function Usuarios({ request }) {
   const [items, setItems] = useState([]);
   const [form, setForm] = useState({ nombre: '', usuario: '', password: '', rol: 'usuario' });
   const [editing, setEditing] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const load = () => request('/usuarios').then((data) => setItems(data.usuarios));
@@ -799,12 +846,14 @@ function Usuarios({ request }) {
   function editUser(user) {
     setEditing(user);
     setForm({ nombre: user.nombre || '', usuario: user.usuario || '', password: '', rol: user.rol || 'usuario' });
+    setModalOpen(true);
     setMessage('');
     setError('');
   }
   function resetUserForm() {
     setEditing(null);
     setForm({ nombre: '', usuario: '', password: '', rol: 'usuario' });
+    setModalOpen(false);
   }
   async function setUserStatus(user, estado) {
     setMessage('');
@@ -833,46 +882,85 @@ function Usuarios({ request }) {
     }
   }
   return (
-    <Panel>
-      <form className="inline-form" onSubmit={submit}>
-        <input placeholder="Nombre" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
-        <input placeholder="Usuario" value={form.usuario} onChange={(e) => setForm({ ...form, usuario: e.target.value })} />
-        <input placeholder={editing ? 'Nueva contrasena opcional' : 'Contrasena'} type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-        <select value={form.rol} onChange={(e) => setForm({ ...form, rol: e.target.value })}>
-          <option value="admin">admin</option>
-          <option value="supervisor">supervisor</option>
-          <option value="reportes">reportes</option>
-          <option value="usuario">usuario</option>
-        </select>
-        <button className="primary">{editing ? 'Actualizar' : 'Crear'}</button>
-        {editing ? <button className="outline-action" type="button" onClick={resetUserForm}>Cancelar</button> : null}
-      </form>
+    <div className="users-page">
+      <div className="admin-page-heading">
+        <div>
+          <p>ADMINISTRACION</p>
+          <h2>Usuarios</h2>
+        </div>
+        <button className="primary admin-create-btn" type="button" onClick={() => { resetUserForm(); setModalOpen(true); }}>
+          <UserPlus size={16} />
+          Crear usuario
+        </button>
+      </div>
       {message ? <p className="success">{message}</p> : null}
       {error ? <p className="error">{error}</p> : null}
-      <DataTable
-        columns={['nombre', 'usuario', 'rol', 'estado', 'acciones']}
-        rows={items.map((item) => ({
-          ...item,
-          acciones: (
-            <RowActions
-              onEdit={() => editUser(item)}
-              onToggle={() => setUserStatus(item, !item.estado)}
-              toggleLabel={item.estado ? 'Desactivar' : 'Activar'}
-              onDelete={() => deleteUser(item)}
-            />
-          )
-        }))}
-      />
-    </Panel>
+      <section className="panel users-card">
+        <h3>Usuarios registrados</h3>
+        <div className="table-wrap">
+          <table className="admin-table users-table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Usuario</th>
+                <th>Rol</th>
+                <th>Estado</th>
+                <th>Fecha</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.nombre}</td>
+                  <td>{item.usuario}</td>
+                  <td>{item.rol}</td>
+                  <td><span className={`status-badge ${item.estado ? 'active' : 'inactive'}`}>{item.estado ? 'Activo' : 'Inactivo'}</span></td>
+                  <td>{formatDateTime(item.fecha_creacion)}</td>
+                  <td>
+                    <div className="text-actions">
+                      <button className="edit-text-btn" type="button" onClick={() => editUser(item)}>
+                        <Edit3 size={15} />
+                        Editar
+                      </button>
+                      <button className="delete-text-btn" type="button" onClick={() => deleteUser(item)}>
+                        <Trash2 size={15} />
+                        Eliminar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {modalOpen ? (
+        <Modal title={editing ? 'Editar usuario' : 'Crear usuario'} onClose={resetUserForm}>
+          <form className="modal-form" onSubmit={submit}>
+            <input placeholder="Nombre" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+            <input placeholder="Usuario" value={form.usuario} onChange={(e) => setForm({ ...form, usuario: e.target.value })} />
+            <input placeholder={editing ? 'Nueva contrasena opcional' : 'Contrasena'} type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            <select value={form.rol} onChange={(e) => setForm({ ...form, rol: e.target.value })}>
+              <option value="admin">admin</option>
+              <option value="supervisor">supervisor</option>
+              <option value="reportes">reportes</option>
+              <option value="usuario">usuario</option>
+            </select>
+            <IconAction label={editing ? 'Actualizar usuario' : 'Crear usuario'} icon={Save} variant="primary" type="submit" />
+          </form>
+        </Modal>
+      ) : null}
+    </div>
   );
 }
 
 function RowActions({ onEdit, onToggle, toggleLabel, onDelete }) {
   return (
     <div className="row-actions">
-      <button className="table-btn" type="button" onClick={onEdit}>Editar</button>
-      <button className="outline-action compact" type="button" onClick={onToggle}>{toggleLabel}</button>
-      <button className="danger-action compact" type="button" onClick={onDelete}>Eliminar</button>
+      <IconAction label="Editar" icon={Edit3} onClick={onEdit} />
+      <IconAction label={toggleLabel} icon={Power} variant="outline" onClick={onToggle} />
+      <IconAction label="Eliminar" icon={Trash2} variant="danger" onClick={onDelete} />
     </div>
   );
 }
@@ -885,6 +973,7 @@ function Tomas({ request, token }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [form, setForm] = useState(defaultTomaForm());
+  const [modalOpen, setModalOpen] = useState(false);
 
   const load = () => request('/tomas').then((data) => setItems(data.tomas));
   const loadUsers = () => request('/usuarios').then((data) => setUsers(data.usuarios.filter((user) => ['usuario', 'operador'].includes(user.rol) && user.estado)));
@@ -898,6 +987,7 @@ function Tomas({ request, token }) {
       const data = await request('/tomas', { method: 'POST', body: JSON.stringify({ ...form, usuarios: form.usuarios.map(Number) }) });
       setMessage(data.message || 'Toma creada');
       setForm(defaultTomaForm());
+      setModalOpen(false);
       await load();
       await openDetail(data.toma.id);
     } catch (err) {
@@ -929,6 +1019,7 @@ function Tomas({ request, token }) {
     try {
       const data = await request(`/tomas/${selected.id}`, { method: 'PATCH', body: JSON.stringify(form) });
       setMessage(data.message || 'Toma actualizada');
+      setModalOpen(false);
       await load();
       await openDetail(selected.id);
     } catch (err) {
@@ -996,6 +1087,7 @@ function Tomas({ request, token }) {
       setSelected(null);
       setParticipants([]);
       setForm(defaultTomaForm());
+      setModalOpen(false);
       setMessage('Toma eliminada correctamente');
       await load();
     } catch (err) {
@@ -1013,20 +1105,27 @@ function Tomas({ request, token }) {
       <section className="panel">
         <div className="section-title">
           <h2>{selected ? `Toma ${selected.numero_toma}` : 'Crear toma fisica'}</h2>
-          {selected ? <button className="outline-action" onClick={() => { setSelected(null); setParticipants([]); setForm(defaultTomaForm()); }}>Nueva</button> : null}
+          <div className="row-actions">
+            <IconAction label={selected ? 'Editar toma' : 'Crear toma'} icon={selected ? Edit3 : Plus} variant="primary" onClick={() => setModalOpen(true)} />
+            {selected ? <IconAction label="Nueva toma" icon={Plus} variant="outline" onClick={() => { setSelected(null); setParticipants([]); setForm(defaultTomaForm()); setModalOpen(true); }} /> : null}
+          </div>
         </div>
-        <TomaForm form={form} setForm={setForm} users={users} onSubmit={selected ? updateToma : createToma} submitLabel={selected ? 'Guardar cambios' : 'Crear toma'} />
         {selected ? (
           <div className="action-grid">
-            <button className="secondary-action" onClick={assignUsers}>Asignar usuarios</button>
-            <button className="table-btn" onClick={() => changeStatus(selected.estado === 'abierta' ? 'cerrar' : 'reabrir')}>{selected.estado === 'abierta' ? 'Cerrar toma' : 'Reabrir toma'}</button>
-            <button className="outline-action" onClick={reuseToma}>Reutilizar toma</button>
-            <button className="outline-action" onClick={() => consolidado(selected)}>Consolidado</button>
-            <button className="danger-action" onClick={deleteToma}>Eliminar</button>
+            <IconAction label="Asignar usuarios" icon={UserPlus} variant="success" onClick={assignUsers} />
+            <IconAction label={selected.estado === 'abierta' ? 'Cerrar toma' : 'Reabrir toma'} icon={Power} variant="primary" onClick={() => changeStatus(selected.estado === 'abierta' ? 'cerrar' : 'reabrir')} />
+            <IconAction label="Reutilizar toma" icon={RefreshCcw} variant="outline" onClick={reuseToma} />
+            <IconAction label="Consolidado" icon={Download} variant="outline" onClick={() => consolidado(selected)} />
+            <IconAction label="Eliminar toma" icon={Trash2} variant="danger" onClick={deleteToma} />
           </div>
         ) : null}
         {message ? <p className="success">{message}</p> : null}
         {error ? <p className="error">{error}</p> : null}
+        {modalOpen ? (
+          <Modal title={selected ? 'Editar toma' : 'Crear toma fisica'} onClose={() => setModalOpen(false)}>
+            <TomaForm form={form} setForm={setForm} users={users} onSubmit={selected ? updateToma : createToma} submitLabel={selected ? 'Guardar cambios' : 'Crear toma'} />
+          </Modal>
+        ) : null}
       </section>
 
       <section className="panel">
@@ -1041,7 +1140,7 @@ function Tomas({ request, token }) {
                 <span>{item.nombre_toma}</span>
                 <small>{item.agencia || 'Sin agencia'} · {item.usuarios_asignados} usuarios · {item.usuarios_finalizados} finalizados</small>
               </div>
-              <button className="table-btn" onClick={() => openDetail(item.id)}>Detalle</button>
+              <IconAction label="Ver detalle" icon={Eye} variant="primary" onClick={() => openDetail(item.id)} />
             </article>
           ))}
         </div>
@@ -1062,7 +1161,7 @@ function Tomas({ request, token }) {
               id: participant.usuario_id,
               ...participant,
               acciones: participant.conteo_estado === 'finalizado'
-                ? <button className="table-btn" onClick={() => enableUser(participant.usuario_id)}>Habilitar</button>
+                ? <IconAction label="Habilitar conteo" icon={RefreshCcw} variant="primary" onClick={() => enableUser(participant.usuario_id)} />
                 : '-'
             }))}
           />
@@ -1110,7 +1209,7 @@ function TomaForm({ form, setForm, users, onSubmit, submitLabel }) {
           </label>
         ))}
       </div>
-      <button className="primary">{submitLabel}</button>
+      <IconAction label={submitLabel} icon={Save} variant="primary" type="submit" />
     </form>
   );
 }
@@ -1183,6 +1282,13 @@ function formatValue(value) {
   if (typeof value === 'boolean') return value ? 'Activo' : 'Inactivo';
   if (value == null) return '-';
   return String(value);
+}
+
+function formatDateTime(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString('sv-SE').replace('T', ' ').slice(0, 19);
 }
 
 createRoot(document.getElementById('root')).render(<App />);
