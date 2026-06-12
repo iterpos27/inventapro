@@ -191,7 +191,8 @@ webApi.get('/mi/conteos/:id', requireWebUser, requirePermission('count'), asyncH
     throw new AppError('Conteo invalido', 422);
   }
   const conteo = await pool.query(
-    `SELECT c.id, c.version, c.estado, c.toma_id, t.numero_toma, t.nombre_toma
+    `SELECT c.id, c.version, c.estado, c.toma_id, t.numero_toma, t.nombre_toma,
+            t.agencia, t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin
      FROM conteos c
      INNER JOIN tomas_fisicas t ON t.id = c.toma_id
      WHERE c.id = $1 AND c.usuario_id = $2

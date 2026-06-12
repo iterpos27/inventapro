@@ -1,10 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Plus, Trash2, ClipboardList, Save, CheckCircle, X } from 'lucide-react';
+import {
+  ArrowRightCircle,
+  Building2,
+  Calendar,
+  CheckCircle,
+  Circle,
+  Plus,
+  Save,
+  Search,
+  Trash2,
+  X
+} from 'lucide-react';
 import { FeedbackToast } from '../components/FeedbackToast';
 
 const SEARCH_CACHE_KEY = 'conteo_recent_searches_v1';
 const SEARCH_CACHE_LIMIT = 100;
 const MAX_VISIBLE_ITEMS = 50;
+const AUTO_SAVE_DELAY = 4500;
 
 function readSearchCache() {
   try {
@@ -30,6 +42,34 @@ function setCachedSearch(term, productos) {
   }
 }
 
+function formatDateTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('es-EC', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(date).replace(',', '').toUpperCase();
+}
+
+function tomaPeriodLabel(toma, field) {
+  if (field === 'habilitacion') {
+    return formatDateTime(toma.fecha_habilitacion) || [toma.fecha_habilitacion, toma.hora_inicio].filter(Boolean).join(' ');
+  }
+  return formatDateTime(toma.fecha_cierre) || [toma.fecha_cierre, toma.hora_fin].filter(Boolean).join(' ');
+}
+
+function savedSnapshot(items) {
+  return JSON.stringify(items
+    .filter((item) => Number(item.cantidad) > 0)
+    .map((item) => ({ producto_id: Number(item.producto_id), cantidad: Number(item.cantidad) })));
+}
+
 export function MiConteo({ request }) {
   const [tomas, setTomas] = useState([]);
   const [conteo, setConteo] = useState(null);
@@ -39,14 +79,20 @@ export function MiConteo({ request }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [highlightedId, setHighlightedId] = useState(null);
+  const [saveStatus, setSaveStatus] = useState('Sin cambios recientes.');
+  const [saving, setSaving] = useState(false);
   const searchAbortRef = useRef(null);
   const searchRequestRef = useRef(0);
   const searchTimerRef = useRef(null);
+  const autoSaveTimerRef = useRef(null);
   const searchInputRef = useRef(null);
   const quantityRefs = useRef(new Map());
+  const lastSavedSnapshotRef = useRef('[]');
+  const savingRef = useRef(false);
 
   const validItems = useMemo(() => items.filter((item) => Number(item.cantidad) > 0), [items]);
   const visibleItems = items.slice(0, MAX_VISIBLE_ITEMS);
+  const itemsSnapshot = useMemo(() => savedSnapshot(items), [items]);
 
   const loadTomas = () => request('/mi/tomas').then((data) => setTomas(data.tomas));
 
@@ -56,6 +102,7 @@ export function MiConteo({ request }) {
 
   useEffect(() => () => {
     window.clearTimeout(searchTimerRef.current);
+    window.clearTimeout(autoSaveTimerRef.current);
     searchAbortRef.current?.abort();
   }, []);
 
@@ -73,6 +120,24 @@ export function MiConteo({ request }) {
     }, delay);
   }, [q]);
 
+  useEffect(() => {
+    window.clearTimeout(autoSaveTimerRef.current);
+    if (!conteo) return;
+    if (itemsSnapshot === lastSavedSnapshotRef.current) {
+      setSaveStatus('Sin cambios recientes.');
+      return;
+    }
+    if (validItems.length === 0) {
+      setSaveStatus(items.length > 0 ? 'Pendiente de cantidades.' : 'Sin cambios recientes.');
+      return;
+    }
+
+    setSaveStatus('Cambios pendientes...');
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      save(false, true);
+    }, AUTO_SAVE_DELAY);
+  }, [conteo?.id, itemsSnapshot]);
+
   async function startToma(toma) {
     setError('');
     setMessage('');
@@ -88,8 +153,11 @@ export function MiConteo({ request }) {
   async function loadConteo(conteoId) {
     try {
       const data = await request(`/mi/conteos/${conteoId}`);
+      const loadedItems = data.items.map((item) => ({ ...item, cantidad: String(Number(item.cantidad) || '') }));
       setConteo(data.conteo);
-      setItems(data.items.map((item) => ({ ...item, cantidad: String(Number(item.cantidad) || '') })));
+      setItems(loadedItems);
+      lastSavedSnapshotRef.current = savedSnapshot(loadedItems);
+      setSaveStatus('Sin cambios recientes.');
       setResults([]);
       setQ('');
     } catch (err) {
@@ -175,173 +243,194 @@ export function MiConteo({ request }) {
     setItems((current) => current.filter((item) => Number(item.producto_id) !== Number(productoId)));
   }
 
-  async function save(finish = false) {
-    if (!conteo) return;
+  async function save(finish = false, silent = false) {
+    if (!conteo || savingRef.current) return;
     setError('');
-    setMessage('');
+    if (!silent) setMessage('');
     if (validItems.length === 0) {
       setError('Agregue productos validos al conteo');
       return;
     }
 
     const endpoint = finish ? 'finalizar' : 'borrador';
+    savingRef.current = true;
+    setSaving(true);
+    setSaveStatus(finish ? 'Finalizando conteo...' : 'Guardando borrador...');
     try {
       const data = await request(`/mi/conteos/${conteo.id}/${endpoint}`, {
         method: 'POST',
         body: JSON.stringify({ conteo_version: conteo.version, items: validItems })
       });
       setConteo((current) => current ? { ...current, version: data.conteo_version, estado: data.estado } : current);
-      setMessage(finish ? 'Conteo finalizado' : 'Borrador guardado');
+      lastSavedSnapshotRef.current = itemsSnapshot;
+      setSaveStatus(finish ? 'Conteo finalizado.' : 'Borrador guardado automaticamente.');
+      if (!silent) setMessage(finish ? 'Conteo finalizado' : 'Borrador guardado');
       if (finish) {
+        window.clearTimeout(autoSaveTimerRef.current);
         setConteo(null);
         setItems([]);
+        lastSavedSnapshotRef.current = '[]';
         await loadTomas();
       }
     } catch (err) {
       setError(err.message);
+      setSaveStatus('No se pudo guardar.');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   }
 
-  return (
-    <div className="count-layout user-conteo-shell">
-      <section className="panel count-panel available-counts-panel">
-        <div className="section-title">
-          <h2>Tomas asignadas</h2>
-        </div>
-        <div className="toma-list available-count-grid">
-          {tomas.map((toma) => (
-            <article className={`toma-card available-count ${conteo?.toma_id === toma.toma_id ? 'selected' : ''}`} key={toma.toma_id}>
-              <div>
-                <strong className="available-count-title">{toma.numero_toma}</strong>
-                <span>{toma.nombre_toma}</span>
-                <small>{toma.agencia || 'Sin agencia'} - {toma.asignacion_estado}</small>
-                {toma.conteo_id && toma.lineas > 0 ? (
-                  <small className="toma-lines-badge">{toma.lineas} {toma.lineas === 1 ? 'linea registrada' : 'lineas registradas'}</small>
-                ) : null}
-              </div>
-              <button className="table-btn" onClick={() => toma.conteo_id ? loadConteo(toma.conteo_id) : startToma(toma)}>
-                {toma.conteo_id ? (toma.lineas > 0 ? 'Continuar' : 'Abrir') : 'Iniciar'}
-              </button>
-            </article>
-          ))}
-          {tomas.length === 0 ? <p className="muted">No hay tomas abiertas asignadas.</p> : null}
-        </div>
-      </section>
-
-      <section className="panel count-panel workbench">
-        {conteo ? (
-          <>
-            <div className="count-operation-card">
-              <div className="operation-card-body">
-                <div className="operation-info">
-                  <span className="operation-tag">Toma activa</span>
-                  <strong className="operation-title">{conteo.numero_toma}</strong>
-                  <span className="save-status">Version {conteo.version}</span>
-                  <p className="operation-meta">{conteo.nombre_toma}</p>
-                </div>
-                <div className="operation-actions">
-                  <button className="secondary-action" onClick={() => save(false)} disabled={validItems.length === 0}>
-                    <Save size={18} />
-                    Guardar borrador
-                  </button>
-                  <button className="primary" onClick={() => save(true)} disabled={validItems.length === 0}>
-                    <CheckCircle size={18} />
-                    Finalizar conteo
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="count-tool">
-              <label htmlFor="mi-conteo-search">Buscar producto</label>
-              <div className="count-search-box">
-                <Search className="search-leading-icon" size={18} />
-                <input
-                  id="mi-conteo-search"
-                  ref={searchInputRef}
-                  className="search-input"
-                  placeholder="Codigo o descripcion"
-                  value={q}
-                  onChange={(event) => setQ(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      searchProducts(q);
-                    }
-                  }}
-                />
-                {q ? (
-                  <button className="search-clear" onClick={clearSearch} aria-label="Limpiar busqueda">
-                    <X size={17} />
-                  </button>
-                ) : null}
-
-                {results.length > 0 ? (
-                  <div className="search-results">
-                    {results.map((product) => (
-                      <button className="search-result" key={product.id} onClick={() => addProduct(product)}>
-                        <span>{product.codigo}</span>
-                        <strong>{product.descripcion}</strong>
-                        <Plus size={16} />
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="section-title count-list-heading">
-              <h2>Productos contados</h2>
-              <span className="count-line-count">{items.length}</span>
-            </div>
-
-            <div className="count-items count-list">
-              {visibleItems.map((item) => (
-                <article
-                  className={`count-item ${Number(item.cantidad) > 0 ? 'has-quantity' : 'is-empty-quantity'} ${Number(highlightedId) === Number(item.producto_id) ? 'is-flashing' : ''}`}
-                  key={item.producto_id}
-                >
-                  <button className="icon-btn count-item-delete" onClick={() => removeItem(item.producto_id)} aria-label="Quitar producto">
-                    <Trash2 size={18} />
-                  </button>
-                  <div className="count-item-main">
-                    <strong>{item.codigo}</strong>
-                    <span>{item.descripcion}</span>
-                  </div>
-                  <div className="count-item-actions">
-                    <input
-                      ref={(node) => {
-                        const key = String(item.producto_id);
-                        if (node) quantityRefs.current.set(key, node);
-                        else quantityRefs.current.delete(key);
-                      }}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="0"
-                      value={item.cantidad ?? ''}
-                      onChange={(event) => updateQty(item.producto_id, event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') searchInputRef.current?.focus();
-                      }}
-                    />
-                  </div>
-                </article>
-              ))}
-              {items.length === 0 ? <p className="muted">Agrega productos para guardar el conteo.</p> : null}
-              {items.length > MAX_VISIBLE_ITEMS ? (
-                <p className="muted">Mostrando los primeros {MAX_VISIBLE_ITEMS} de {items.length} productos contados.</p>
-              ) : null}
-            </div>
-
-            <FeedbackToast message={message} error={error} onClose={() => { setMessage(''); setError(''); }} />
-          </>
-        ) : (
-          <div className="empty-state">
-            <ClipboardList size={42} />
-            <strong>Selecciona una toma</strong>
+  if (!conteo) {
+    return (
+      <div className="user-conteo-shell user-conteo-select">
+        <div className="admin-page-heading user-conteo-heading">
+          <div>
+            <p>CONTEO FISICO</p>
+            <h2>Seleccionar conteo</h2>
           </div>
-        )}
+        </div>
+
+        <section className="panel count-panel available-counts-panel">
+          <div className="section-title">
+            <h2>Conteos disponibles</h2>
+          </div>
+          <div className="toma-list available-count-grid">
+            {tomas.map((toma) => (
+              <button
+                className="toma-card available-count"
+                key={toma.toma_id}
+                onClick={() => toma.conteo_id ? loadConteo(toma.conteo_id) : startToma(toma)}
+              >
+                <span className="available-count-body">
+                  <strong className="available-count-title">{toma.numero_toma}</strong>
+                  <span>AGENCIA: {toma.agencia || ''}</span>
+                  <span>HABILITACION: {tomaPeriodLabel(toma, 'habilitacion')}</span>
+                  <span>FINALIZACION: {tomaPeriodLabel(toma, 'cierre')}</span>
+                  <small>{toma.lineas || 0} {Number(toma.lineas) === 1 ? 'linea registrada' : 'lineas registradas'} - {toma.conteo_id ? 'Continuar' : 'Empezar'}</small>
+                </span>
+                <ArrowRightCircle size={22} />
+              </button>
+            ))}
+            {tomas.length === 0 ? <p className="muted">No hay tomas abiertas asignadas.</p> : null}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className="user-conteo-shell user-conteo-active">
+      <section className="count-panel workbench">
+        <div className="count-operation-card">
+          <div className="operation-card-body">
+            <div className="operation-info">
+              <span className="operation-tag"><Circle size={10} fill="currentColor" /> OPERACION ACTIVA</span>
+              <strong className="operation-title">{conteo.numero_toma}</strong>
+              <span className="save-status">{saveStatus}</span>
+              <div className="operation-meta">
+                <span><Building2 size={14} /> Agencia: {conteo.agencia || ''}</span>
+                <span><Calendar size={14} /> Habilitacion: {tomaPeriodLabel(conteo, 'habilitacion')}</span>
+                <span><Calendar size={14} /> Cierre: {tomaPeriodLabel(conteo, 'cierre')}</span>
+              </div>
+            </div>
+            <div className="operation-actions">
+              <button className="secondary-action" onClick={() => save(false)} disabled={saving || validItems.length === 0}>
+                <Save size={18} />
+                Guardar borrador
+              </button>
+              <button className="primary success-action" onClick={() => save(true)} disabled={saving || validItems.length === 0}>
+                <CheckCircle size={18} />
+                Finalizar conteo
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="count-tool">
+          <label htmlFor="mi-conteo-search">Buscar producto</label>
+          <div className="count-search-box">
+            <Search className="search-leading-icon" size={18} />
+            <input
+              id="mi-conteo-search"
+              ref={searchInputRef}
+              className="search-input"
+              placeholder="Codigo o descripcion"
+              value={q}
+              onChange={(event) => setQ(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  searchProducts(q);
+                }
+              }}
+            />
+            {q ? (
+              <button className="search-clear" onClick={clearSearch} aria-label="Limpiar busqueda">
+                <X size={17} />
+              </button>
+            ) : null}
+
+            {results.length > 0 ? (
+              <div className="search-results">
+                {results.map((product) => (
+                  <button className="search-result" key={product.id} onClick={() => addProduct(product)}>
+                    <span>{product.codigo}</span>
+                    <strong>{product.descripcion}</strong>
+                    <Plus size={16} />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="panel counted-products-card">
+          <div className="section-title count-list-heading">
+            <h2>Productos contados</h2>
+            <span className="count-line-count">{items.length}</span>
+          </div>
+          <div className="count-items count-list">
+            {visibleItems.map((item) => (
+              <article
+                className={`count-item ${Number(item.cantidad) > 0 ? 'has-quantity' : 'is-empty-quantity'} ${Number(highlightedId) === Number(item.producto_id) ? 'is-flashing' : ''}`}
+                key={item.producto_id}
+              >
+                <button className="icon-btn count-item-delete" onClick={() => removeItem(item.producto_id)} aria-label="Quitar producto">
+                  <Trash2 size={18} />
+                </button>
+                <div className="count-item-main">
+                  <strong>{item.codigo}</strong>
+                  <span>{item.descripcion}</span>
+                </div>
+                <div className="count-item-actions">
+                  <input
+                    ref={(node) => {
+                      const key = String(item.producto_id);
+                      if (node) quantityRefs.current.set(key, node);
+                      else quantityRefs.current.delete(key);
+                    }}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0"
+                    value={item.cantidad ?? ''}
+                    onChange={(event) => updateQty(item.producto_id, event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') searchInputRef.current?.focus();
+                    }}
+                  />
+                </div>
+              </article>
+            ))}
+            {items.length === 0 ? <p className="empty-count-message">Agregue productos para iniciar el conteo.</p> : null}
+            {items.length > MAX_VISIBLE_ITEMS ? (
+              <p className="muted">Mostrando los primeros {MAX_VISIBLE_ITEMS} de {items.length} productos contados.</p>
+            ) : null}
+          </div>
+        </div>
+
+        <FeedbackToast message={message} error={error} onClose={() => { setMessage(''); setError(''); }} />
       </section>
     </div>
   );

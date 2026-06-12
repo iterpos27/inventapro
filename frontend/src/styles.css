@@ -2626,3 +2626,236 @@ th {
     line-height: 1.1;
   }
 }
+
+/* Ajuste final: seleccion de conteo y operacion activa como PHP web/webmobil */
+.user-conteo-select,
+.user-conteo-active {
+  display: grid;
+  gap: 14px;
+  max-width: none;
+  margin-inline: 0;
+}
+
+.user-conteo-heading {
+  margin-bottom: 0;
+}
+
+.user-conteo-heading h2 {
+  font-size: 26px;
+}
+
+.user-conteo-shell .available-counts-panel {
+  width: min(980px, 100%);
+}
+
+.user-conteo-shell .available-counts-panel .section-title {
+  margin-bottom: 10px;
+}
+
+.user-conteo-shell .available-counts-panel .section-title h2 {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.user-conteo-shell .available-count {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  min-height: 140px;
+  border: 1px solid #bfd7ef;
+  background: #ffffff;
+  color: #003a70;
+  text-align: left;
+}
+
+.user-conteo-shell .available-count:hover {
+  border-color: #2563a7;
+  box-shadow: 0 0 0 3px #d1e9ff;
+}
+
+.user-conteo-shell .available-count-body {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.user-conteo-shell .available-count-body small {
+  margin-top: 6px;
+  color: #31577f;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.user-conteo-shell .available-count svg {
+  color: #2563a7;
+}
+
+.user-conteo-active .workbench {
+  display: grid;
+  gap: 16px;
+  min-height: 0;
+}
+
+.user-conteo-active .count-operation-card,
+.user-conteo-active .count-tool,
+.user-conteo-active .counted-products-card {
+  border: 1px solid #bfd7ef;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.user-conteo-active .count-operation-card {
+  min-height: 154px;
+}
+
+.user-conteo-active .operation-card-body {
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 154px;
+  padding: 20px;
+}
+
+.user-conteo-active .operation-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: #31577f;
+  padding: 0;
+  font-size: 12px;
+}
+
+.user-conteo-active .operation-tag svg {
+  color: #12865a;
+}
+
+.user-conteo-active .operation-title {
+  font-size: 21px;
+}
+
+.user-conteo-active .save-status {
+  background: transparent;
+  color: #31577f;
+  padding: 0;
+  font-size: 12px;
+}
+
+.user-conteo-active .operation-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.user-conteo-active .operation-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  border: 1px solid #d6dee8;
+  border-radius: 5px;
+  background: #f8fbff;
+  color: #31577f;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.user-conteo-active .operation-meta span:first-child {
+  border-color: #93c5fd;
+  background: #dbeafe;
+  color: #1570ef;
+}
+
+.user-conteo-active .operation-actions {
+  align-self: center;
+}
+
+.user-conteo-active .operation-actions button {
+  min-width: 168px;
+  min-height: 44px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.user-conteo-active .operation-actions .secondary-action {
+  border-color: #2563a7;
+  background: #ffffff;
+  color: #003a70;
+}
+
+.user-conteo-active .operation-actions .success-action {
+  background: #12865a;
+}
+
+.user-conteo-active .count-tool {
+  padding: 18px 14px 14px;
+}
+
+.user-conteo-active .count-tool label {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.user-conteo-active .search-leading-icon {
+  display: none;
+}
+
+.user-conteo-active .search-input {
+  min-height: 42px;
+  padding-left: 12px;
+  font-size: 14px;
+}
+
+.user-conteo-active .counted-products-card {
+  min-height: 130px;
+  padding: 16px;
+}
+
+.user-conteo-active .counted-products-card .count-list-heading {
+  margin-bottom: 20px;
+}
+
+.user-conteo-active .empty-count-message {
+  margin: 18px 0 4px;
+  color: #31577f;
+  text-align: center;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .user-conteo-heading h2 {
+    font-size: 23px;
+  }
+
+  .user-conteo-shell .available-counts-panel {
+    width: 100%;
+  }
+
+  .user-conteo-shell .available-count {
+    min-height: 126px;
+  }
+
+  .user-conteo-active .operation-card-body {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    padding: 16px;
+  }
+
+  .user-conteo-active .operation-actions {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .user-conteo-active .operation-actions button {
+    width: 100%;
+  }
+
+  .user-conteo-active .operation-meta {
+    display: grid;
+  }
+}
