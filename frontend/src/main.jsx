@@ -585,10 +585,10 @@ function IconAction({ label, icon: Icon, variant = 'plain', onClick, type = 'but
   );
 }
 
-function Modal({ title, children, onClose }) {
+function Modal({ title, children, onClose, size = 'md' }) {
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="modal-panel" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
+      <section className={`modal-panel ${size === 'sm' ? 'small' : ''}`} role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
         <header className="modal-header">
           <h2>{title}</h2>
           <IconAction label="Cerrar" icon={X} onClick={onClose} />
@@ -818,6 +818,7 @@ function Usuarios({ request }) {
   const [form, setForm] = useState({ nombre: '', usuario: '', password: '', rol: 'usuario' });
   const [editing, setEditing] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const load = () => request('/usuarios').then((data) => setItems(data.usuarios));
@@ -830,7 +831,7 @@ function Usuarios({ request }) {
       if (editing) {
         await request(`/usuarios/${editing.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({ ...form, estado: editing.estado })
+          body: JSON.stringify({ ...form, estado: form.estado })
         });
         setMessage('Usuario actualizado correctamente');
       } else {
@@ -845,14 +846,14 @@ function Usuarios({ request }) {
   }
   function editUser(user) {
     setEditing(user);
-    setForm({ nombre: user.nombre || '', usuario: user.usuario || '', password: '', rol: user.rol || 'usuario' });
+    setForm({ nombre: user.nombre || '', usuario: user.usuario || '', password: '', rol: user.rol || 'usuario', estado: Boolean(user.estado) });
     setModalOpen(true);
     setMessage('');
     setError('');
   }
   function resetUserForm() {
     setEditing(null);
-    setForm({ nombre: '', usuario: '', password: '', rol: 'usuario' });
+    setForm({ nombre: '', usuario: '', password: '', rol: 'usuario', estado: true });
     setModalOpen(false);
   }
   async function setUserStatus(user, estado) {
@@ -875,6 +876,7 @@ function Usuarios({ request }) {
     try {
       await request(`/usuarios/${user.id}`, { method: 'DELETE' });
       setMessage('Usuario desactivado correctamente');
+      setDeleteTarget(null);
       if (editing?.id === user.id) resetUserForm();
       load();
     } catch (err) {
@@ -923,7 +925,7 @@ function Usuarios({ request }) {
                         <Edit3 size={15} />
                         Editar
                       </button>
-                      <button className="delete-text-btn" type="button" onClick={() => deleteUser(item)}>
+                      <button className="delete-text-btn" type="button" onClick={() => setDeleteTarget(item)}>
                         <Trash2 size={15} />
                         Eliminar
                       </button>
@@ -937,18 +939,60 @@ function Usuarios({ request }) {
       </section>
       {modalOpen ? (
         <Modal title={editing ? 'Editar usuario' : 'Crear usuario'} onClose={resetUserForm}>
-          <form className="modal-form" onSubmit={submit}>
-            <input placeholder="Nombre" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
-            <input placeholder="Usuario" value={form.usuario} onChange={(e) => setForm({ ...form, usuario: e.target.value })} />
-            <input placeholder={editing ? 'Nueva contrasena opcional' : 'Contrasena'} type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-            <select value={form.rol} onChange={(e) => setForm({ ...form, rol: e.target.value })}>
-              <option value="admin">admin</option>
-              <option value="supervisor">supervisor</option>
-              <option value="reportes">reportes</option>
-              <option value="usuario">usuario</option>
-            </select>
-            <IconAction label={editing ? 'Actualizar usuario' : 'Crear usuario'} icon={Save} variant="primary" type="submit" />
+          <form className="modal-form user-modal-form" onSubmit={submit}>
+            <label>
+              Nombre
+              <input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+            </label>
+            <label>
+              Usuario
+              <input value={form.usuario} onChange={(e) => setForm({ ...form, usuario: e.target.value })} />
+            </label>
+            <label>
+              {editing ? 'Clave nueva' : 'Contrasena'}
+              <input
+                type="password"
+                placeholder={editing ? 'Dejar vacio para no cambiar' : ''}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+              />
+            </label>
+            <div className={editing ? 'modal-two-cols' : ''}>
+              <label>
+                Rol
+                <select value={form.rol} onChange={(e) => setForm({ ...form, rol: e.target.value })}>
+                  <option value="admin">Admin</option>
+                  <option value="supervisor">Supervisor</option>
+                  <option value="reportes">Reportes</option>
+                  <option value="usuario">Usuario</option>
+                </select>
+              </label>
+              {editing ? (
+                <label>
+                  Estado
+                  <select value={form.estado ? '1' : '0'} onChange={(e) => setForm({ ...form, estado: e.target.value === '1' })}>
+                    <option value="1">Activo</option>
+                    <option value="0">Inactivo</option>
+                  </select>
+                </label>
+              ) : null}
+            </div>
+            <footer className="modal-actions">
+              <button className="outline-action" type="button" onClick={resetUserForm}>Cancelar</button>
+              <button className="primary" type="submit">{editing ? 'Guardar cambios' : 'Crear'}</button>
+            </footer>
           </form>
+        </Modal>
+      ) : null}
+      {deleteTarget ? (
+        <Modal title="Eliminar usuario" onClose={() => setDeleteTarget(null)} size="sm">
+          <div className="confirm-body">
+            Desea eliminar/desactivar el usuario <strong>{deleteTarget.nombre}</strong>?
+          </div>
+          <footer className="modal-actions">
+            <button className="outline-action" type="button" onClick={() => setDeleteTarget(null)}>Cancelar</button>
+            <button className="danger-solid" type="button" onClick={() => deleteUser(deleteTarget)}>Si, eliminar</button>
+          </footer>
         </Modal>
       ) : null}
     </div>
