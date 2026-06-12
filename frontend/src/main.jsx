@@ -182,7 +182,13 @@ function roleLabel(role) {
   return labels[role] || 'Administrador';
 }
 
+function truncateText(value, maxLength = 110) {
+  const text = String(value || '');
+  return text.length > maxLength ? `${text.slice(0, maxLength).trimEnd()}...` : text;
+}
+
 function Sidebar({ items, route, setRoute, open, setOpen }) {
+  const [adminOpen, setAdminOpen] = useState(false);
   const grouped = groupNav(items);
   return (
     <>
@@ -215,7 +221,11 @@ function Sidebar({ items, route, setRoute, open, setOpen }) {
                     key={item.id}
                     className={route === item.id || (item.id === 'administracion' && groupActive) ? 'active' : ''}
                     onClick={() => {
-                      setRoute(item.id === 'administracion' ? 'usuarios' : item.id);
+                      if (item.id === 'administracion') {
+                        setAdminOpen((current) => !current);
+                        return;
+                      }
+                      setRoute(item.id);
                       setOpen(false);
                     }}
                   >
@@ -225,7 +235,7 @@ function Sidebar({ items, route, setRoute, open, setOpen }) {
                   </button>
                 );
                 })}
-                {group.name === 'Administracion' && groupActive ? (
+                {group.name === 'Administracion' && (adminOpen || groupActive) ? (
                   <div className="nav-children">
                     {childItems.map((item) => (
                       <button
@@ -797,7 +807,7 @@ function Productos({ request }) {
               {items.map((item) => (
                 <tr key={item.id}>
                   <td>{item.codigo}</td>
-                  <td>{item.descripcion}</td>
+                  <td className="product-description" title={item.descripcion}>{truncateText(item.descripcion, 110)}</td>
                   <td>
                     <div className="text-actions">
                       <button className="edit-text-btn" type="button" onClick={() => editProduct(item)}>

@@ -836,6 +836,11 @@ h1 {
   font-size: 13px;
 }
 
+.product-description {
+  max-width: 760px;
+  line-height: 1.35;
+}
+
 .pagination-bar {
   display: flex;
   align-items: center;
