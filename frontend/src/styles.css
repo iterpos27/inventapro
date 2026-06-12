@@ -12,6 +12,7 @@
 body {
   margin: 0;
   font-size: 13px;
+  overflow-x: hidden;
 }
 
 button,
@@ -26,6 +27,7 @@ button {
 
 .shell {
   min-height: 100vh;
+  width: 100%;
   display: grid;
   grid-template-columns: 256px 1fr;
   background: #f4f8fd;
@@ -157,6 +159,7 @@ button {
 
 .main {
   min-width: 0;
+  width: 100%;
   padding: 0 22px 24px;
 }
 
@@ -1049,7 +1052,9 @@ button.primary:disabled {
 
 .table-wrap {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -1626,6 +1631,15 @@ th {
     min-height: 75px;
   }
 
+  .admin-page-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .admin-page-heading h2 {
+    font-size: 21px;
+  }
+
   .account-menu {
     margin-left: auto;
   }
@@ -1650,6 +1664,11 @@ th {
     width: 100%;
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .product-heading-actions .primary,
+  .product-heading-actions .outline-action {
+    flex: 0 1 auto;
   }
 
   .report-filter {
@@ -1679,11 +1698,27 @@ th {
 
 @media (max-width: 620px) {
   .main {
-    padding: 16px;
+    padding: 0 12px 16px;
+  }
+
+  .topbar {
+    min-height: 62px;
+    margin: 0 -12px 14px;
+    padding: 8px 12px;
+    gap: 10px;
   }
 
   h1 {
-    font-size: 22px;
+    font-size: 16px;
+  }
+
+  .eyebrow {
+    font-size: 10px;
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
   }
 
   .account span {
@@ -1691,8 +1726,10 @@ th {
   }
 
   .account-trigger {
-    min-width: 48px;
-    width: 48px;
+    min-width: 40px;
+    width: 40px;
+    min-height: 36px;
+    padding: 7px;
     justify-content: center;
   }
 
@@ -1731,6 +1768,76 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .admin-page-heading {
+    display: grid;
+    gap: 10px;
+  }
+
+  .admin-page-heading h2 {
+    font-size: 20px;
+  }
+
+  .admin-create-btn,
+  .product-heading-actions,
+  .product-heading-actions .primary,
+  .product-heading-actions .outline-action {
+    width: 100%;
+  }
+
+  .product-heading-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .panel,
+  .users-card,
+  .product-search-card,
+  .product-table-card,
+  .report-card,
+  .toma-create-panel,
+  .toma-table-card {
+    padding: 12px;
+  }
+
+  input,
+  select {
+    min-height: 34px;
+    padding: 8px 10px;
+  }
+
+  button.primary,
+  .searchbar button,
+  .table-btn,
+  .file-label,
+  .secondary-action {
+    min-height: 34px;
+    padding: 8px 11px;
+  }
+
+  table {
+    min-width: 620px;
+  }
+
+  .products-table {
+    min-width: 560px;
+  }
+
+  .users-table th,
+  .users-table td {
+    padding: 8px 9px;
+  }
+
+  .text-actions {
+    justify-content: flex-end;
+  }
+
+  .edit-text-btn,
+  .toggle-text-btn,
+  .delete-text-btn {
+    min-height: 30px;
+    padding: 6px 8px;
+  }
+
   .quick-actions {
     display: grid;
   }
@@ -1751,6 +1858,10 @@ th {
 
   .product-search-row {
     grid-template-columns: 1fr;
+  }
+
+  .product-search-row button {
+    width: 100%;
   }
 
   .pagination-bar {
@@ -1778,6 +1889,8 @@ th {
 
   .toma-form,
   .inline-toma-form,
+  .modal-two-cols,
+  .product-search,
   .action-grid {
     grid-template-columns: 1fr;
   }
