@@ -726,6 +726,20 @@ h1 {
   color: #ff365d;
 }
 
+.edit-text-btn.success {
+  border-color: #12865a;
+  background: #12865a;
+  color: #ffffff;
+}
+
+.edit-text-btn:disabled,
+.toggle-text-btn:disabled,
+.delete-text-btn:disabled,
+.outline-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .agencies-table th:last-child,
 .agencies-table td:last-child {
   text-align: right;
@@ -1298,6 +1312,98 @@ th {
   grid-column: 1 / -1;
 }
 
+.toma-detail-page {
+  gap: 14px;
+}
+
+.toma-detail-heading {
+  align-items: start;
+}
+
+.toma-detail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.toma-detail-toolbar .compact,
+.toma-detail-toolbar .edit-text-btn,
+.toma-detail-toolbar .delete-text-btn {
+  min-height: 30px;
+  padding: 6px 9px;
+  font-size: 12px;
+}
+
+.toma-summary-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 176px;
+  padding: 16px;
+  color: #003a70;
+  font-weight: 900;
+}
+
+.toma-summary-card p {
+  margin: 12px 0 0;
+  line-height: 1.5;
+}
+
+.toma-summary-card aside {
+  min-width: 190px;
+  display: grid;
+  align-content: start;
+  justify-items: end;
+  gap: 7px;
+  color: #173b63;
+  font-size: 12px;
+}
+
+.toma-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.toma-metrics-grid .metric {
+  min-height: 69px;
+  padding: 13px 14px;
+}
+
+.toma-metrics-grid .metric span {
+  margin-bottom: 12px;
+  font-size: 11px;
+}
+
+.toma-metrics-grid .metric strong {
+  font-size: 16px;
+}
+
+.toma-metrics-grid .metric.success strong {
+  color: #12865a;
+}
+
+.toma-metrics-grid .metric.warning strong {
+  color: #b77900;
+}
+
+.toma-participants-card h3 {
+  margin-bottom: 8px;
+}
+
+.toma-participants-table {
+  min-width: 980px;
+}
+
+.toma-participants-table td:first-child span {
+  display: block;
+  margin-top: 2px;
+  color: #344054;
+  font-size: 11px;
+}
+
 .toma-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1736,6 +1842,18 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .toma-detail-heading {
+    display: grid;
+  }
+
+  .toma-detail-toolbar {
+    justify-content: flex-start;
+  }
+
+  .toma-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .inline-toma-form {
     grid-template-columns: 1fr 1fr;
   }
@@ -1928,6 +2046,26 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .toma-summary-card {
+    display: grid;
+    min-height: auto;
+  }
+
+  .toma-summary-card aside {
+    justify-items: start;
+  }
+
+  .toma-detail-toolbar,
+  .toma-detail-toolbar .compact,
+  .toma-detail-toolbar .edit-text-btn,
+  .toma-detail-toolbar .delete-text-btn {
+    width: 100%;
+  }
+
+  .toma-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
   .count-item .icon-btn {
     width: 100%;
   }
@@ -1946,5 +2084,162 @@ th {
 
   .toma-detail-actions {
     grid-template-columns: repeat(3, 36px);
+  }
+}
+
+/* ══════════════════════════════════════════════
+   Métricas de participantes de toma
+══════════════════════════════════════════════ */
+.toma-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.toma-metrics-grid .metric {
+  background: #f4f8fd;
+  border: 1px solid #dce8f5;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toma-metrics-grid .metric span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #5a7ea0;
+}
+
+.toma-metrics-grid .metric strong {
+  font-size: 22px;
+  font-weight: 700;
+  color: #003a70;
+}
+
+.toma-metrics-grid .metric.warning {
+  background: #fff8e6;
+  border-color: #f5c842;
+}
+
+.toma-metrics-grid .metric.warning strong {
+  color: #a06800;
+}
+
+.toma-metrics-grid .metric.success {
+  background: #edfbf0;
+  border-color: #68d48a;
+}
+
+.toma-metrics-grid .metric.success strong {
+  color: #1a7a36;
+}
+
+/* Badge de líneas registradas en tarjeta de toma del usuario */
+.toma-lines-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  background: #e4effc;
+  color: #1c4f82;
+  border-radius: 20px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Acciones de texto en tabla de participantes */
+.text-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.text-actions .edit-text-btn,
+.text-actions .toggle-text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.text-actions .edit-text-btn {
+  color: #1a7a36;
+  border-color: #68d48a;
+}
+
+.text-actions .edit-text-btn:hover {
+  background: #edfbf0;
+}
+
+.text-actions .toggle-text-btn {
+  color: #1c4f82;
+  border-color: #7cafd7;
+}
+
+.text-actions .toggle-text-btn:hover {
+  background: #e4effc;
+}
+
+@media (max-width: 640px) {
+  .toma-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.toma-detail-page .toma-metrics-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.toma-detail-page .toma-metrics-grid .metric {
+  min-height: 69px;
+  border-radius: 5px;
+  border-top: 3px solid #2563a7;
+  padding: 13px 14px;
+  background: #ffffff;
+}
+
+.toma-detail-page .toma-metrics-grid .metric span {
+  margin-bottom: 12px;
+  color: #173b63;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.toma-detail-page .toma-metrics-grid .metric strong {
+  color: #003a70;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.toma-detail-page .toma-participants-card .text-actions .edit-text-btn.success {
+  border-color: #12865a;
+  background: #12865a;
+  color: #ffffff;
+}
+
+@media (max-width: 980px) {
+  .toma-detail-page .toma-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .toma-detail-page .toma-metrics-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import express from 'express';
 import jwt from 'jsonwebtoken';
@@ -63,9 +64,27 @@ webApi.post('/auth/login', asyncHandler(async (req, res) => {
     );
     throw new AppError('Usuario o contrasena incorrectos', 401);
   }
-  const token = jwt.sign({ sub: user.id, rol: user.rol }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+  const jti = crypto.randomUUID();
+  const token = jwt.sign({ sub: user.id, rol: user.rol, jti }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
   await pool.query('DELETE FROM login_attempts WHERE usuario = $1 AND ip = $2', [usuario, ip]);
   res.json({ ok: true, token, user: publicUser(user) });
+}));
+
+webApi.post('/auth/logout', requireWebUser, asyncHandler(async (req, res) => {
+  const payload = req.tokenPayload;
+  if (payload?.jti) {
+    // Calcular cuándo expira el token para limpiar la blacklist automáticamente
+    const expiraEn = payload.exp
+      ? new Date(payload.exp * 1000).toISOString()
+      : new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+    await pool.query(
+      'INSERT INTO revoked_tokens (jti, usuario_id, expira_en) VALUES ($1, $2, $3) ON CONFLICT (jti) DO NOTHING',
+      [payload.jti, req.user.id, expiraEn]
+    );
+    // Limpiar tokens ya expirados de la blacklist (mantenimiento)
+    await pool.query('DELETE FROM revoked_tokens WHERE expira_en < NOW()').catch(() => {});
+  }
+  res.json({ ok: true, message: 'Sesion cerrada correctamente' });
 }));
 
 webApi.get('/auth/me', requireWebUser, asyncHandler(async (req, res) => {
@@ -112,11 +131,16 @@ webApi.get('/mi/tomas', requireWebUser, requirePermission('count'), asyncHandler
             t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin,
             tu.estado AS asignacion_estado,
             c.id AS conteo_id, c.estado AS conteo_estado, c.version AS conteo_version,
-            c.fecha_inicio, c.fecha_finalizacion
+            c.fecha_inicio, c.fecha_finalizacion,
+            COUNT(d.id)::int AS lineas
      FROM toma_usuarios tu
      INNER JOIN tomas_fisicas t ON t.id = tu.toma_id
      LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id
+     LEFT JOIN conteo_detalle d ON d.conteo_id = c.id
      WHERE tu.usuario_id = $1 AND t.estado = 'abierta'
+     GROUP BY t.id, t.numero_toma, t.nombre_toma, t.agencia, t.estado,
+              t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin,
+              tu.estado, c.id, c.estado, c.version, c.fecha_inicio, c.fecha_finalizacion
      ORDER BY t.id DESC`,
     [req.user.id]
   );
@@ -377,11 +401,18 @@ webApi.delete('/usuarios/:id', requireWebUser, requirePermission('admin'), async
 webApi.get('/tomas', requireWebUser, asyncHandler(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT t.*,
-      COALESCE(r.usuarios_asignados, 0) AS usuarios_asignados,
+     COALESCE(r.usuarios_asignados, 0) AS usuarios_asignados,
       COALESCE(r.usuarios_finalizados, 0) AS usuarios_finalizados,
+      COALESCE(p.usuarios_en_proceso, 0) AS usuarios_en_proceso,
       COALESCE(r.unidades_contadas, 0) AS unidades_contadas
      FROM tomas_fisicas t
      LEFT JOIN toma_resumen r ON r.toma_id = t.id
+     LEFT JOIN (
+       SELECT toma_id, COUNT(*)::int AS usuarios_en_proceso
+       FROM toma_usuarios
+       WHERE estado = 'en_proceso'
+       GROUP BY toma_id
+     ) p ON p.toma_id = t.id
      ORDER BY t.id DESC
      LIMIT 100`
   );
@@ -445,15 +476,33 @@ webApi.get('/tomas/:id', requireWebUser, requirePermission('admin'), asyncHandle
   }
   const participantes = await pool.query(
     `SELECT tu.estado AS asignacion_estado, tu.fecha_asignacion, u.id AS usuario_id, u.nombre, u.usuario,
-            c.id AS conteo_id, c.estado AS conteo_estado, c.fecha_inicio, c.fecha_finalizacion
+            c.id AS conteo_id, c.estado AS conteo_estado, c.fecha_inicio, c.fecha_finalizacion, c.archivo_excel,
+            COUNT(d.id)::int AS lineas,
+            COALESCE(SUM(d.cantidad), 0)::numeric AS unidades
      FROM toma_usuarios tu
      INNER JOIN usuarios u ON u.id = tu.usuario_id
      LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id
+     LEFT JOIN conteo_detalle d ON d.conteo_id = c.id
      WHERE tu.toma_id = $1
+     GROUP BY tu.estado, tu.fecha_asignacion, u.id, u.nombre, u.usuario,
+              c.id, c.estado, c.fecha_inicio, c.fecha_finalizacion, c.archivo_excel
      ORDER BY u.nombre`,
     [tomaId]
   );
-  res.json({ ok: true, toma: toma.rows[0], participantes: participantes.rows });
+  // Calcular pendientes en JS: asignados - finalizados - en_proceso
+  const resumen = participantes.rows.reduce(
+    (acc, p) => {
+      acc.asignados++;
+      if (p.asignacion_estado === 'finalizado') acc.finalizados++;
+      if (p.asignacion_estado === 'en_proceso') acc.en_proceso++;
+      acc.lineas += Number(p.lineas || 0);
+      acc.unidades += Number(p.unidades || 0);
+      return acc;
+    },
+    { asignados: 0, finalizados: 0, en_proceso: 0, lineas: 0, unidades: 0 }
+  );
+  resumen.pendientes = Math.max(0, resumen.asignados - resumen.finalizados - resumen.en_proceso);
+  res.json({ ok: true, toma: toma.rows[0], participantes: participantes.rows, resumen });
 }));
 
 webApi.patch('/tomas/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {

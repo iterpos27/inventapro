@@ -18,6 +18,18 @@ export async function requireWebUser(req, res, next) {
       throw new AppError('Token requerido', 401);
     }
     const payload = jwt.verify(token, config.jwtSecret);
+
+    // Verificar que el token no ha sido revocado (blacklist de logout)
+    if (payload.jti) {
+      const revoked = await pool.query(
+        'SELECT 1 FROM revoked_tokens WHERE jti = $1 AND expira_en > NOW() LIMIT 1',
+        [payload.jti]
+      );
+      if (revoked.rowCount > 0) {
+        throw new AppError('Sesion cerrada. Inicie sesion nuevamente.', 401);
+      }
+    }
+
     const { rows } = await pool.query(
       'SELECT id, nombre, usuario, rol FROM usuarios WHERE id = $1 AND estado = TRUE LIMIT 1',
       [payload.sub]
@@ -26,6 +38,7 @@ export async function requireWebUser(req, res, next) {
       throw new AppError('Token invalido', 401);
     }
     req.user = rows[0];
+    req.tokenPayload = payload;
     next();
   } catch (error) {
     next(error.status ? error : new AppError('Token invalido', 401));
@@ -72,4 +85,3 @@ export function requirePermission(permission) {
     next();
   };
 }
-

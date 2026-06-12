@@ -1,4 +1,5 @@
 import { AppError } from '../utils/errors.js';
+import { exportConteoExcel } from '../services/excelService.js';
 
 export async function closeExpiredTomas(db, tomaId = null) {
   const params = [];
@@ -7,28 +8,111 @@ export async function closeExpiredTomas(db, tomaId = null) {
     params.push(tomaId);
     filter += ` AND id = $${params.length}`;
   }
-  await db.query(
-    `UPDATE tomas_fisicas
-     SET estado = 'finalizada', fecha_finalizacion = NOW()
+
+  // Obtener tomas vencidas para procesarlas individualmente en transacción
+  const expired = await db.query(
+    `SELECT id FROM tomas_fisicas
      WHERE ${filter}
        AND fecha_cierre IS NOT NULL
        AND (
          fecha_cierre < CURRENT_DATE
-         OR (fecha_cierre = CURRENT_DATE AND hora_fin IS NOT NULL AND hora_fin < CURRENT_TIME)
-       )`,
+         OR (fecha_cierre = CURRENT_DATE AND hora_fin IS NOT NULL AND hora_fin::time < CURRENT_TIME)
+       )
+     ORDER BY id`,
     params
   );
+
+  for (const row of expired.rows) {
+    const tId = Number(row.id);
+    try {
+      // Finalizar conteos en borrador que tengan detalle → generar Excel
+      const borradores = await db.query(
+        `SELECT c.id, c.usuario_id
+         FROM conteos c
+         INNER JOIN conteo_detalle d ON d.conteo_id = c.id
+         WHERE c.toma_id = $1 AND c.estado = 'borrador'
+         GROUP BY c.id, c.usuario_id`,
+        [tId]
+      );
+
+      for (const conteo of borradores.rows) {
+        try {
+          // Generar Excel si es posible (no bloquea el cierre si falla)
+          await exportConteoExcel(Number(conteo.id), { id: conteo.usuario_id, rol: 'usuario' });
+        } catch (_) {
+          // No crítico: continuar cerrando aunque falle la exportación
+        }
+        await db.query(
+          "UPDATE conteos SET estado = 'finalizado', fecha_finalizacion = COALESCE(fecha_finalizacion, NOW()), updated_at = NOW() WHERE id = $1",
+          [conteo.id]
+        );
+        await db.query(
+          "UPDATE toma_usuarios SET estado = 'finalizado' WHERE toma_id = $1 AND usuario_id = $2 AND estado != 'finalizado'",
+          [tId, conteo.usuario_id]
+        );
+      }
+
+      // Cerrar la toma
+      await db.query(
+        "UPDATE tomas_fisicas SET estado = 'finalizada', fecha_finalizacion = COALESCE(fecha_finalizacion, NOW()) WHERE id = $1 AND estado = 'abierta'",
+        [tId]
+      );
+
+      // Refrescar resumen
+      await refreshTomaSummary(db, tId);
+
+      // Registrar en audit log
+      try {
+        await db.query(
+          "INSERT INTO audit_logs (action, entity, entity_id, details) VALUES ('auto_close', 'toma', $1, $2)",
+          [tId, JSON.stringify({ reason: 'expired_window' })]
+        );
+      } catch (_) { /* No crítico */ }
+    } catch (err) {
+      // Log del error pero continuar con la siguiente toma
+      try {
+        await db.query(
+          "INSERT INTO app_logs (level, event, message, context) VALUES ('error', 'auto_close_toma_failed', $1, $2)",
+          [`No se pudo cerrar toma vencida ${tId}`, JSON.stringify({ toma_id: tId, error: err.message })]
+        );
+      } catch (_) { /* ignore */ }
+    }
+  }
 }
 
 export function validateTomaWindow(toma) {
-  const today = new Date().toISOString().slice(0, 10);
-  const enabled = toma.fecha_habilitacion ? String(toma.fecha_habilitacion).slice(0, 10) : null;
-  const closed = toma.fecha_cierre ? String(toma.fecha_cierre).slice(0, 10) : null;
-  if (enabled && enabled > today) {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+
+  // Normalizar fecha: puede ser string ISO, string con T, o Date object de pg
+  function toDateStr(value) {
+    if (!value) return null;
+    if (value instanceof Date) {
+      return value.toISOString().slice(0, 10);
+    }
+    return String(value).slice(0, 10);
+  }
+
+  const enabled = toDateStr(toma.fecha_habilitacion);
+  const closed = toDateStr(toma.fecha_cierre);
+
+  if (enabled && enabled > todayStr) {
     throw new AppError('La toma aun no esta habilitada', 422);
   }
-  if (closed && closed < today) {
-    throw new AppError('La toma ya fue cerrada', 422);
+
+  if (closed) {
+    if (closed < todayStr) {
+      throw new AppError('La toma ya fue cerrada', 422);
+    }
+    // Si la fecha de cierre es HOY, verificar también la hora de fin
+    if (closed === todayStr && toma.hora_fin) {
+      const [hours, minutes] = String(toma.hora_fin).slice(0, 5).split(':').map(Number);
+      const closeTime = new Date(now);
+      closeTime.setHours(hours, minutes, 0, 0);
+      if (now > closeTime) {
+        throw new AppError('El horario de la toma ha finalizado', 422);
+      }
+    }
   }
 }
 
@@ -143,4 +227,3 @@ export async function refreshTomaSummary(db, tomaId) {
     [tomaId]
   );
 }
-
