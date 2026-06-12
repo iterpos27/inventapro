@@ -52,12 +52,22 @@ webApi.get('/auth/me', requireWebUser, asyncHandler(async (req, res) => {
 }));
 
 webApi.get('/dashboard', requireWebUser, asyncHandler(async (req, res) => {
-  const [products, tomas, active, finalized, users] = await Promise.all([
+  const [products, tomas, active, tomasFinalizadas, finalized, drafts, users, latestTomas] = await Promise.all([
     pool.query('SELECT COUNT(*)::int AS total FROM productos WHERE estado = TRUE'),
     pool.query('SELECT COUNT(*)::int AS total FROM tomas_fisicas'),
     pool.query("SELECT COUNT(*)::int AS total FROM tomas_fisicas WHERE estado = 'abierta'"),
+    pool.query("SELECT COUNT(*)::int AS total FROM tomas_fisicas WHERE estado = 'finalizada'"),
     pool.query("SELECT COUNT(*)::int AS total FROM conteos WHERE estado = 'finalizado'"),
-    pool.query('SELECT COUNT(*)::int AS total FROM usuarios WHERE estado = TRUE')
+    pool.query("SELECT COUNT(*)::int AS total FROM conteos WHERE estado = 'borrador'"),
+    pool.query('SELECT COUNT(*)::int AS total FROM usuarios WHERE estado = TRUE'),
+    pool.query(
+      `SELECT t.numero_toma, t.nombre_toma, t.estado, t.fecha_creacion, t.fecha_finalizacion,
+              COALESCE(r.usuarios_asignados, 0) AS usuarios_asignados
+       FROM tomas_fisicas t
+       LEFT JOIN toma_resumen r ON r.toma_id = t.id
+       ORDER BY t.id DESC
+       LIMIT 8`
+    )
   ]);
   res.json({
     ok: true,
@@ -65,9 +75,12 @@ webApi.get('/dashboard', requireWebUser, asyncHandler(async (req, res) => {
       productos: products.rows[0].total,
       tomas: tomas.rows[0].total,
       tomas_abiertas: active.rows[0].total,
+      tomas_finalizadas: tomasFinalizadas.rows[0].total,
       conteos_finalizados: finalized.rows[0].total,
+      conteos_borrador: drafts.rows[0].total,
       usuarios: users.rows[0].total
-    }
+    },
+    latest_tomas: latestTomas.rows
   });
 }));
 

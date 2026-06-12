@@ -4,8 +4,11 @@ import {
   Boxes,
   Building2,
   CheckCircle,
+  ChevronDown,
   ClipboardCheck,
   ClipboardList,
+  FileText,
+  Gauge,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -13,7 +16,9 @@ import {
   Plus,
   Save,
   Search,
+  Settings,
   Trash2,
+  UserCircle,
   Users,
   X
 } from 'lucide-react';
@@ -60,13 +65,13 @@ async function downloadFile(token, path) {
 }
 
 const nav = [
-  { id: 'mi_conteo', label: 'Mi conteo', icon: ClipboardList, permissions: ['count'] },
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'productos', label: 'Productos', icon: Boxes },
-  { id: 'tomas', label: 'Tomas fisicas', icon: ClipboardCheck },
-  { id: 'conteos', label: 'Conteos', icon: PackageSearch },
-  { id: 'agencias', label: 'Agencias', icon: Building2 },
-  { id: 'usuarios', label: 'Usuarios', icon: Users }
+  { id: 'dashboard', label: 'Dashboard', icon: Gauge, group: 'main' },
+  { id: 'mi_conteo', label: 'Nuevo conteo', icon: ClipboardList, group: 'Conteo y Borradores', permissions: ['count'] },
+  { id: 'conteos', label: 'Reportes generales', icon: FileText, group: 'Reportes' },
+  { id: 'productos', label: 'Productos', icon: Boxes, group: 'main' },
+  { id: 'usuarios', label: 'Usuarios', icon: Users, group: 'Administracion' },
+  { id: 'agencias', label: 'Agencias', icon: Building2, group: 'Administracion' },
+  { id: 'tomas', label: 'Configuracion del sistema', icon: Settings, group: 'Administracion' }
 ];
 
 function App() {
@@ -74,6 +79,7 @@ function App() {
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('inventapro_user') || 'null'));
   const [route, setRoute] = useState(user?.rol === 'usuario' ? 'mi_conteo' : 'dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   const request = useMemo(() => api(token), [token]);
   const navItems = useMemo(() => navForUser(user), [user]);
@@ -122,14 +128,26 @@ function App() {
             <Menu size={20} />
           </button>
           <div>
-            <p className="eyebrow">Centro Ruliman</p>
-            <h1>{navItems.find((item) => item.id === route)?.label}</h1>
+            <p className="eyebrow">{roleLabel(user?.rol)}</p>
+            <h1>{route === 'dashboard' ? 'Panel' : navItems.find((item) => item.id === route)?.label}</h1>
           </div>
-          <div className="account">
-            <span>{user?.nombre}</span>
-            <button className="icon-btn" onClick={logout} aria-label="Cerrar sesion">
-              <LogOut size={18} />
+          <div className="account-menu">
+            <button className="account-trigger" onClick={() => setAccountOpen((value) => !value)}>
+              <UserCircle size={22} />
+              <span>
+                <strong>{user?.nombre || 'Administrador'}</strong>
+                <small>{roleLabel(user?.rol)}</small>
+              </span>
+              <ChevronDown size={16} />
             </button>
+            {accountOpen ? (
+              <div className="account-popover">
+                <button onClick={logout}>
+                  <LogOut size={18} />
+                  Salir
+                </button>
+              </div>
+            ) : null}
           </div>
         </header>
         <Current request={request} user={user} token={token} />
@@ -146,42 +164,66 @@ function navForUser(user) {
   return nav;
 }
 
+function roleLabel(role) {
+  const labels = {
+    admin: 'Administrador',
+    supervisor: 'Supervisor',
+    reportes: 'Reportes',
+    usuario: 'Usuario',
+    operador: 'Usuario'
+  };
+  return labels[role] || 'Administrador';
+}
+
 function Sidebar({ items, route, setRoute, open, setOpen }) {
+  const grouped = groupNav(items);
   return (
     <>
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="brand">
-          <div className="brand-mark">IP</div>
+          <div className="brand-mark">CR</div>
           <div>
-            <strong>InventaPro</strong>
-            <span>Inventario fisico</span>
+            <strong>CENTRO DEL RULIMAN</strong>
+            <span>SISTEMA DE INVENTARIO</span>
           </div>
           <button className="icon-btn close mobile-only" onClick={() => setOpen(false)} aria-label="Cerrar menu">
             <X size={18} />
           </button>
         </div>
-        <nav>
-          {items.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                className={route === item.id ? 'active' : ''}
-                onClick={() => {
-                  setRoute(item.id);
-                  setOpen(false);
-                }}
-              >
-                <Icon size={18} />
-                {item.label}
-              </button>
-            );
-          })}
+        <nav className="side-nav">
+          {grouped.map((group) => (
+            <div className={group.name === 'main' ? 'nav-block plain' : 'nav-block'} key={group.name}>
+              {group.name !== 'main' ? <div className="nav-heading">{group.name}<ChevronDown size={15} /></div> : null}
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    className={route === item.id ? 'active' : ''}
+                    onClick={() => {
+                      setRoute(item.id);
+                      setOpen(false);
+                    }}
+                  >
+                    <Icon size={18} />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
       </aside>
       {open ? <button className="backdrop mobile-only" onClick={() => setOpen(false)} aria-label="Cerrar menu" /> : null}
     </>
   );
+}
+
+function groupNav(items) {
+  const order = ['main', 'Conteo y Borradores', 'Reportes', 'Administracion'];
+  return order
+    .map((name) => ({ name, items: items.filter((item) => (item.group || 'main') === name) }))
+    .filter((group) => group.items.length > 0);
 }
 
 function Login({ onLogin }) {
@@ -419,15 +461,89 @@ function MiConteo({ request }) {
 
 function Dashboard({ request }) {
   const [metrics, setMetrics] = useState(null);
-  useEffect(() => { request('/dashboard').then((data) => setMetrics(data.metrics)); }, [request]);
+  const [latest, setLatest] = useState([]);
+  useEffect(() => {
+    request('/dashboard').then((data) => {
+      setMetrics(data.metrics);
+      setLatest(data.latest_tomas || []);
+    });
+  }, [request]);
   const cards = [
-    ['Productos activos', metrics?.productos || 0],
-    ['Tomas creadas', metrics?.tomas || 0],
+    ['Productos', metrics?.productos || 0],
     ['Tomas abiertas', metrics?.tomas_abiertas || 0],
     ['Conteos finalizados', metrics?.conteos_finalizados || 0],
     ['Usuarios activos', metrics?.usuarios || 0]
   ];
-  return <section className="grid metrics">{cards.map(([label, value]) => <article className="metric" key={label}><span>{label}</span><strong>{value}</strong></article>)}</section>;
+  const tomasTotal = Math.max(1, (metrics?.tomas_abiertas || 0) + (metrics?.tomas_finalizadas || 0));
+  const conteosTotal = Math.max(1, (metrics?.conteos_finalizados || 0) + (metrics?.conteos_borrador || 0));
+  const tomasPercent = Math.round(((metrics?.tomas_finalizadas || 0) / tomasTotal) * 100);
+  const conteosPercent = Math.round(((metrics?.conteos_finalizados || 0) / conteosTotal) * 100);
+
+  return (
+    <div className="dashboard-view">
+      <div className="page-kicker">INVENTARIO FISICO</div>
+      <h2>Panel de control</h2>
+      <section className="grid metrics">{cards.map(([label, value]) => <article className="metric" key={label}><span>{label}</span><strong>{value}</strong></article>)}</section>
+      <section className="dashboard-widgets">
+        <DonutCard
+          title="Estado de tomas"
+          percent={tomasPercent}
+          color="#15803d"
+          rows={[
+            ['Finalizadas', metrics?.tomas_finalizadas || 0, '#15803d'],
+            ['Abiertas', metrics?.tomas_abiertas || 0, '#eab308']
+          ]}
+        />
+        <DonutCard
+          title="Avance de conteos"
+          percent={conteosPercent}
+          color="#2563a7"
+          rows={[
+            ['Finalizados', metrics?.conteos_finalizados || 0, '#15803d'],
+            ['Borradores', metrics?.conteos_borrador || 0, '#eab308']
+          ]}
+        />
+        <article className="widget trend-widget">
+          <h3>Tendencia de conteos</h3>
+          <div className="trend-bars">
+            <div className="trend-bar" style={{ height: `${Math.max(34, (metrics?.conteos_finalizados || 1) * 10)}px` }} />
+            <strong>{metrics?.conteos_finalizados || 0}</strong>
+            <span>{new Date().toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit' })}</span>
+          </div>
+        </article>
+      </section>
+      <div className="quick-actions">
+        <button className="primary"><Plus size={18} />Crear toma</button>
+        <button className="outline-action"><Boxes size={18} />Productos</button>
+        <button className="link-action"><FileText size={18} />Reportes</button>
+      </div>
+      <section className="panel latest-panel">
+        <h3>Ultimas tomas fisicas</h3>
+        <DataTable columns={['numero_toma', 'usuarios_asignados', 'estado', 'fecha_creacion', 'fecha_finalizacion']} rows={latest.map((item, index) => ({ id: `${item.numero_toma}-${index}`, ...item }))} />
+      </section>
+    </div>
+  );
+}
+
+function DonutCard({ title, percent, color, rows }) {
+  return (
+    <article className="widget donut-card">
+      <h3>{title}</h3>
+      <div className="donut-layout">
+        <div className="donut" style={{ '--percent': `${percent}%`, '--donut-color': color }}>
+          <span>{percent}%</span>
+        </div>
+        <div className="legend-list">
+          {rows.map(([label, value, dot]) => (
+            <div className="legend-row" key={label}>
+              <i style={{ background: dot }} />
+              <strong>{label}: {value}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+    </article>
+  );
 }
 
 function Productos({ request }) {
