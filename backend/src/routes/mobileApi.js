@@ -89,11 +89,14 @@ mobileApi.get('/tomas', requireApiUser, asyncHandler(async (req, res) => {
     `SELECT t.id AS toma_id, t.numero_toma, t.nombre_toma, t.agencia, t.estado AS toma_estado,
             t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin,
             tu.estado AS asignacion_estado,
-            c.id AS conteo_id, c.estado AS conteo_estado, c.fecha_inicio, c.fecha_finalizacion
+            c.id AS conteo_id, c.estado AS conteo_estado, c.fecha_inicio, c.fecha_finalizacion,
+            COALESCE(COUNT(cd.id), 0)::int AS lineas
      FROM toma_usuarios tu
      INNER JOIN tomas_fisicas t ON t.id = tu.toma_id
      LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id
+     LEFT JOIN conteo_detalle cd ON cd.conteo_id = c.id
      WHERE tu.usuario_id = $1 AND t.estado = 'abierta'
+     GROUP BY t.id, tu.estado, c.id
      ORDER BY t.id DESC`,
     [req.user.id]
   );

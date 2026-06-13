@@ -5,7 +5,7 @@ Migracion de `centro_ruliman_inventario` desde PHP/MySQL a PERN:
 - PostgreSQL para datos.
 - Express para API y autenticacion.
 - React + Vite para panel web responsive inspirado en TailAdmin.
-- API web responsive. La API movil heredada queda desactivada por defecto.
+- App web responsive y app movil Flutter de operacion para usuarios.
 - Importacion y exportacion Excel con `exceljs`, sin depender de `xlsx`.
 
 ## Requisitos
@@ -28,7 +28,7 @@ JWT_SECRET=cambia_este_valor
 JWT_EXPIRES_IN=8h
 FRONTEND_URL=http://localhost:5173
 TRUST_PROXY=false
-ENABLE_MOBILE_API=false
+ENABLE_MOBILE_API=true
 JSON_LIMIT=2mb
 APP_SEED_ADMIN_USER=admin
 APP_SEED_ADMIN_PASSWORD=Administrador123!
@@ -58,15 +58,17 @@ Backend: `http://localhost:4000`
 
 Frontend: `http://localhost:5173`
 
-## API movil heredada
+## App movil Flutter
 
-El proyecto actual se usa como web y web movil. Por seguridad, las rutas moviles heredadas no se montan a menos que se configure:
+La carpeta `mobile` contiene la app de operacion para usuarios de conteo. No incluye administracion, productos, agencias ni reportes.
+
+Para usarla, habilita las rutas moviles en el backend:
 
 ```env
 ENABLE_MOBILE_API=true
 ```
 
-Si se habilitan, las rutas moviles se exponen bajo `/api/v1`:
+Las rutas moviles se exponen bajo `/api/v1`:
 
 - `POST /api/v1/login`
 - `POST /api/v1/logout`
@@ -79,6 +81,26 @@ Si se habilitan, las rutas moviles se exponen bajo `/api/v1`:
 - `POST /api/v1/finalizar_conteo`
 
 Tambien se montan en `/api/*` solo cuando `ENABLE_MOBILE_API=true`.
+
+Ejecutar en Android emulador:
+
+```powershell
+cd mobile
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:4000/api/v1
+```
+
+Ejecutar en telefono fisico Android o iPhone en la misma red:
+
+```powershell
+cd mobile
+flutter run --dart-define=API_BASE_URL=http://IP_DE_TU_PC:4000/api/v1
+```
+
+Para produccion se recomienda exponer el backend por HTTPS y compilar con esa URL:
+
+```powershell
+flutter build apk --release --dart-define=API_BASE_URL=https://tu-dominio.com/api/v1
+```
 
 ## Flujos Excel portados
 
