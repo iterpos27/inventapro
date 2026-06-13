@@ -5,7 +5,7 @@ Migracion de `centro_ruliman_inventario` desde PHP/MySQL a PERN:
 - PostgreSQL para datos.
 - Express para API y autenticacion.
 - React + Vite para panel web responsive inspirado en TailAdmin.
-- Compatibilidad con la APK en `/api/v1/*`.
+- API web responsive. La API movil heredada queda desactivada por defecto.
 - Importacion y exportacion Excel con `exceljs`, sin depender de `xlsx`.
 
 ## Requisitos
@@ -25,6 +25,11 @@ Edita `backend\.env`:
 ```env
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/inventapro
 JWT_SECRET=cambia_este_valor
+JWT_EXPIRES_IN=8h
+FRONTEND_URL=http://localhost:5173
+TRUST_PROXY=false
+ENABLE_MOBILE_API=false
+JSON_LIMIT=2mb
 APP_SEED_ADMIN_USER=admin
 APP_SEED_ADMIN_PASSWORD=Administrador123!
 ```
@@ -53,9 +58,15 @@ Backend: `http://localhost:4000`
 
 Frontend: `http://localhost:5173`
 
-## Rutas compatibles con APK
+## API movil heredada
 
-Las rutas moviles del PHP se conservan bajo `/api/v1`:
+El proyecto actual se usa como web y web movil. Por seguridad, las rutas moviles heredadas no se montan a menos que se configure:
+
+```env
+ENABLE_MOBILE_API=true
+```
+
+Si se habilitan, las rutas moviles se exponen bajo `/api/v1`:
 
 - `POST /api/v1/login`
 - `POST /api/v1/logout`
@@ -67,7 +78,7 @@ Las rutas moviles del PHP se conservan bajo `/api/v1`:
 - `POST /api/v1/guardar_cambios`
 - `POST /api/v1/finalizar_conteo`
 
-Tambien se montan en `/api/*` para compatibilidad web.
+Tambien se montan en `/api/*` solo cuando `ENABLE_MOBILE_API=true`.
 
 ## Flujos Excel portados
 

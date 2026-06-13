@@ -51,7 +51,7 @@ export async function exportConteoExcel(conteoId, user) {
     { header: 'Cantidad', key: 'cantidad', width: 14 },
     { header: 'Usuario', key: 'usuario', width: 28 }
   ];
-  rows.forEach((row) => sheet.addRow(row));
+  rows.forEach((row) => sheet.addRow(excelSafeRow(row)));
   styleSheet(sheet);
 
   await ensureStorage();
@@ -117,7 +117,7 @@ export async function generateConsolidadoExcel(tomaId) {
   const columns = [
     { header: 'Codigo', key: 'codigo', width: 18 },
     { header: 'Descripcion', key: 'descripcion', width: 55 },
-    ...usuarios.map((usuario) => ({ header: usuario.nombre, key: `usuario_${usuario.id}`, width: 18 })),
+    ...usuarios.map((usuario) => ({ header: excelSafeValue(usuario.nombre), key: `usuario_${usuario.id}`, width: 18 })),
     { header: 'Cantidad total', key: 'total', width: 18 }
   ];
   sheet.columns = columns;
@@ -131,7 +131,7 @@ export async function generateConsolidadoExcel(tomaId) {
     usuarios.forEach((usuario) => {
       row[`usuario_${usuario.id}`] = producto.usuarios.get(Number(usuario.id)) || '';
     });
-    sheet.addRow(row);
+    sheet.addRow(excelSafeRow(row));
   }
   styleSheet(sheet);
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
@@ -145,57 +145,60 @@ export async function generateConsolidadoExcel(tomaId) {
 }
 
 export async function importProductsFromFile(file, userId) {
-  const extension = path.extname(file.originalname || '').toLowerCase();
-  if (!['.xlsx', '.csv'].includes(extension)) {
-    throw new AppError('Formato no permitido. Use .xlsx o .csv', 422);
+  try {
+    const extension = path.extname(file.originalname || '').toLowerCase();
+    if (!['.xlsx', '.csv'].includes(extension)) {
+      throw new AppError('Formato no permitido. Use .xlsx o .csv', 422);
+    }
+
+    const headerInfo = extension === '.csv'
+      ? await readCsvHeaders(file.path)
+      : await readXlsxHeaders(file.path);
+    const { headers, totalRows } = headerInfo;
+    const codigoCol = headers.codigo;
+    const descripcionCol = headers.descripcion;
+    if (!codigoCol || !descripcionCol) {
+      throw new AppError('Columnas requeridas no encontradas: codigo, descripcion', 422);
+    }
+
+    return await withTransaction(async (db) => {
+      const job = await db.query(
+        `INSERT INTO import_jobs
+          (usuario_id, archivo, nombre_original, extension, codigo_col, descripcion_col, total_rows, estado, actualizado_en)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'procesando',NOW())
+         RETURNING id`,
+        [userId, file.path, file.originalname, extension.slice(1), codigoCol, descripcionCol, totalRows]
+      );
+      const counters = extension === '.csv'
+        ? await importCsvProducts(db, file.path, codigoCol, descripcionCol)
+        : await importXlsxProducts(db, file.path, codigoCol, descripcionCol);
+      await db.query(
+        `UPDATE import_jobs
+         SET current_row = $1, procesados = $2, insertados = $3, actualizados = $4, omitidos = $5,
+             estado = 'finalizado', actualizado_en = NOW(), finalizado_en = NOW()
+         WHERE id = $6`,
+        [
+          counters.rowsRead + 2,
+          counters.procesados,
+          counters.insertados,
+          0,
+          counters.omitidos,
+          job.rows[0].id
+        ]
+      );
+      return {
+        job_id: Number(job.rows[0].id),
+        procesados: counters.procesados,
+        insertados: counters.insertados,
+        actualizados: 0,
+        omitidos: counters.omitidos
+      };
+    });
+  } finally {
+    if (file?.path) {
+      await fs.unlink(file.path).catch(() => {});
+    }
   }
-
-  const headerInfo = extension === '.csv'
-    ? await readCsvHeaders(file.path)
-    : await readXlsxHeaders(file.path);
-  const { headers, totalRows } = headerInfo;
-  const codigoCol = headers.codigo;
-  const descripcionCol = headers.descripcion;
-  if (!codigoCol || !descripcionCol) {
-    throw new AppError('Columnas requeridas no encontradas: codigo, descripcion', 422);
-  }
-
-  const summary = await withTransaction(async (db) => {
-    const job = await db.query(
-      `INSERT INTO import_jobs
-        (usuario_id, archivo, nombre_original, extension, codigo_col, descripcion_col, total_rows, estado, actualizado_en)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'procesando',NOW())
-       RETURNING id`,
-      [userId, file.path, file.originalname, extension.slice(1), codigoCol, descripcionCol, totalRows]
-    );
-    const counters = extension === '.csv'
-      ? await importCsvProducts(db, file.path, codigoCol, descripcionCol)
-      : await importXlsxProducts(db, file.path, codigoCol, descripcionCol);
-    await db.query(
-      `UPDATE import_jobs
-       SET current_row = $1, procesados = $2, insertados = $3, actualizados = $4, omitidos = $5,
-           estado = 'finalizado', actualizado_en = NOW(), finalizado_en = NOW()
-       WHERE id = $6`,
-      [
-        counters.rowsRead + 2,
-        counters.procesados,
-        counters.insertados,
-        0,
-        counters.omitidos,
-        job.rows[0].id
-      ]
-    );
-    return {
-      job_id: Number(job.rows[0].id),
-      procesados: counters.procesados,
-      insertados: counters.insertados,
-      actualizados: 0,
-      omitidos: counters.omitidos
-    };
-  });
-
-  await fs.unlink(file.path).catch(() => {});
-  return summary;
 }
 
 async function readCsvHeaders(filePath) {
@@ -403,6 +406,15 @@ function normalizeCellText(value) {
     if (value.result != null) return String(value.result).trim();
   }
   return String(value).trim();
+}
+
+function excelSafeRow(row) {
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, excelSafeValue(value)]));
+}
+
+function excelSafeValue(value) {
+  if (typeof value !== 'string') return value;
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
 }
 
 function timestamp() {

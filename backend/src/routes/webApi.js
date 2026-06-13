@@ -30,7 +30,12 @@ export const webApi = express.Router();
 await ensureStorage();
 const upload = multer({
   dest: importStorageDir(),
-  limits: { fileSize: 30 * 1024 * 1024 }
+  limits: { fileSize: 30 * 1024 * 1024 },
+  fileFilter: (req, file, callback) => {
+    const extension = String(file.originalname || '').toLowerCase().match(/\.[^.]+$/)?.[0];
+    const allowed = ['.xlsx', '.csv'].includes(extension);
+    callback(allowed ? null : new AppError('Formato no permitido. Use .xlsx o .csv', 422), allowed);
+  }
 });
 const productSearchCache = new Map();
 const PRODUCT_SEARCH_CACHE_TTL_MS = 60 * 1000;
