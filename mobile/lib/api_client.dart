@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:http/http.dart' as http;
 
@@ -34,6 +35,16 @@ class ApiClient {
     };
   }
 
+  Future<http.Response> _send(Future<http.Response> request) async {
+    try {
+      return await request.timeout(const Duration(seconds: 12));
+    } on TimeoutException {
+      throw const ApiException('No se pudo conectar con el servidor. Revise la IP del backend y la red.');
+    } on http.ClientException catch (error) {
+      throw ApiException('No se pudo conectar con el servidor. ${error.message}');
+    }
+  }
+
   Future<Map<String, dynamic>> _decode(http.Response response) async {
     final decoded = jsonDecode(response.body.isEmpty ? '{}' : response.body);
     if (response.statusCode >= 400) {
@@ -49,7 +60,7 @@ class ApiClient {
   }
 
   Future<CountSession> login(String usuario, String password) async {
-    final response = await _http.post(
+    final response = await _send(_http.post(
       _uri('/login'),
       headers: _headers(),
       body: jsonEncode({
@@ -57,7 +68,7 @@ class ApiClient {
         'password': password,
         'device': 'Flutter ${DateTime.now().toIso8601String()}',
       }),
-    );
+    ));
     final data = await _decode(response);
     token = '${data['token'] ?? ''}';
     return CountSession(token: token!, user: SessionUser.fromJson(data['user'] ?? {}));
@@ -65,34 +76,34 @@ class ApiClient {
 
   Future<void> logout() async {
     try {
-      await _http.post(_uri('/logout'), headers: _headers());
+      await _send(_http.post(_uri('/logout'), headers: _headers()));
     } finally {
       token = null;
     }
   }
 
   Future<List<Toma>> tomas() async {
-    final response = await _http.get(_uri('/tomas'), headers: _headers());
+    final response = await _send(_http.get(_uri('/tomas'), headers: _headers()));
     final data = await _decode(response);
     final list = data['tomas'] is List ? data['tomas'] as List : const [];
     return list.map((item) => Toma.fromJson(Map<String, dynamic>.from(item))).toList();
   }
 
   Future<int> iniciarConteo(int tomaId) async {
-    final response = await _http.post(
+    final response = await _send(_http.post(
       _uri('/iniciar_conteo'),
       headers: _headers(),
       body: jsonEncode({'toma_id': tomaId}),
-    );
+    ));
     final data = await _decode(response);
     return int.tryParse('${data['conteo_id']}') ?? 0;
   }
 
   Future<({ConteoInfo conteo, List<CountItem> items})> detalleConteo(int conteoId, [Toma? toma]) async {
-    final response = await _http.get(
+    final response = await _send(_http.get(
       _uri('/detalle_conteo', {'conteo_id': '$conteoId'}),
       headers: _headers(),
-    );
+    ));
     final data = await _decode(response);
     final rawItems = data['items'] is List ? data['items'] as List : const [];
     final conteo = ConteoInfo(
@@ -113,14 +124,14 @@ class ApiClient {
   }
 
   Future<List<Product>> searchProducts(String q) async {
-    final response = await _http.get(_uri('/productos', {'q': q}), headers: _headers());
+    final response = await _send(_http.get(_uri('/productos', {'q': q}), headers: _headers()));
     final data = await _decode(response);
     final list = data['productos'] is List ? data['productos'] as List : const [];
     return list.map((item) => Product.fromJson(Map<String, dynamic>.from(item))).toList();
   }
 
   Future<int> guardarBorrador(int conteoId, int version, List<CountItem> items) async {
-    final response = await _http.post(
+    final response = await _send(_http.post(
       _uri('/guardar_borrador'),
       headers: _headers(),
       body: jsonEncode({
@@ -128,13 +139,13 @@ class ApiClient {
         'conteo_version': version,
         'items': items.map((item) => item.toJson()).toList(),
       }),
-    );
+    ));
     final data = await _decode(response);
     return int.tryParse('${data['conteo_version'] ?? version}') ?? version;
   }
 
   Future<int> finalizarConteo(int conteoId, int version, List<CountItem> items) async {
-    final response = await _http.post(
+    final response = await _send(_http.post(
       _uri('/finalizar_conteo'),
       headers: _headers(),
       body: jsonEncode({
@@ -142,7 +153,7 @@ class ApiClient {
         'conteo_version': version,
         'items': items.map((item) => item.toJson()).toList(),
       }),
-    );
+    ));
     final data = await _decode(response);
     return int.tryParse('${data['conteo_version'] ?? version}') ?? version;
   }
