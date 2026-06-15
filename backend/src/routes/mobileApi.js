@@ -97,7 +97,7 @@ mobileApi.get('/tomas', requireApiUser, asyncHandler(async (req, res) => {
      INNER JOIN tomas_fisicas t ON t.id = tu.toma_id
      LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id
      LEFT JOIN conteo_detalle cd ON cd.conteo_id = c.id
-     WHERE tu.usuario_id = $1 AND t.estado = 'abierta'
+     WHERE tu.usuario_id = $1 AND t.estado = 'abierta' AND tu.estado != 'finalizado'
      GROUP BY t.id, tu.estado, c.id
      ORDER BY t.id DESC`,
     [req.user.id]
@@ -117,7 +117,7 @@ mobileApi.post('/iniciar_conteo', requireApiUser, asyncHandler(async (req, res) 
       `SELECT t.id, t.nombre_toma, t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin
        FROM tomas_fisicas t
        INNER JOIN toma_usuarios tu ON tu.toma_id = t.id
-       WHERE t.id = $1 AND tu.usuario_id = $2 AND t.estado = 'abierta'
+       WHERE t.id = $1 AND tu.usuario_id = $2 AND t.estado = 'abierta' AND tu.estado != 'finalizado'
        FOR UPDATE`,
       [tomaId, req.user.id]
     );
@@ -127,7 +127,10 @@ mobileApi.post('/iniciar_conteo', requireApiUser, asyncHandler(async (req, res) 
     }
     validateTomaWindow(toma);
 
-    const current = await db.query('SELECT id FROM conteos WHERE toma_id = $1 AND usuario_id = $2 LIMIT 1', [tomaId, req.user.id]);
+    const current = await db.query('SELECT id, estado FROM conteos WHERE toma_id = $1 AND usuario_id = $2 LIMIT 1', [tomaId, req.user.id]);
+    if (current.rows[0] && current.rows[0].estado !== 'borrador') {
+      throw new AppError('Conteo no disponible', 422);
+    }
     let id = current.rows[0]?.id;
     if (!id) {
       const created = await db.query(
@@ -148,7 +151,19 @@ mobileApi.get('/detalle_conteo', requireApiUser, asyncHandler(async (req, res) =
   if (conteoId <= 0) {
     throw new AppError('Conteo invalido', 422);
   }
-  const conteo = await pool.query('SELECT id, version FROM conteos WHERE id = $1 AND usuario_id = $2 LIMIT 1', [conteoId, req.user.id]);
+  const conteo = await pool.query(
+    `SELECT c.id, c.version
+     FROM conteos c
+     INNER JOIN tomas_fisicas t ON t.id = c.toma_id
+     INNER JOIN toma_usuarios tu ON tu.toma_id = c.toma_id AND tu.usuario_id = c.usuario_id
+     WHERE c.id = $1
+       AND c.usuario_id = $2
+       AND c.estado = 'borrador'
+       AND t.estado = 'abierta'
+       AND tu.estado != 'finalizado'
+     LIMIT 1`,
+    [conteoId, req.user.id]
+  );
   if (!conteo.rows[0]) {
     throw new AppError('Conteo no disponible', 404);
   }

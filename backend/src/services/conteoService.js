@@ -122,7 +122,12 @@ export async function activeDraftForUser(db, conteoId, usuarioId, lock = false) 
     `SELECT c.id, c.toma_id, c.version, t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin
      FROM conteos c
      INNER JOIN tomas_fisicas t ON t.id = c.toma_id
-     WHERE c.id = $1 AND c.usuario_id = $2 AND c.estado = 'borrador' AND t.estado = 'abierta'
+     INNER JOIN toma_usuarios tu ON tu.toma_id = c.toma_id AND tu.usuario_id = c.usuario_id
+     WHERE c.id = $1
+       AND c.usuario_id = $2
+       AND c.estado = 'borrador'
+       AND t.estado = 'abierta'
+       AND tu.estado != 'finalizado'
      ${lockSql}`,
     [conteoId, usuarioId]
   );

@@ -180,7 +180,7 @@ webApi.get('/mi/tomas', requireWebUser, requirePermission('count'), asyncHandler
      INNER JOIN tomas_fisicas t ON t.id = tu.toma_id
      LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id
      LEFT JOIN conteo_detalle d ON d.conteo_id = c.id
-     WHERE tu.usuario_id = $1 AND t.estado = 'abierta'
+     WHERE tu.usuario_id = $1 AND t.estado = 'abierta' AND tu.estado != 'finalizado'
      GROUP BY t.id, t.numero_toma, t.nombre_toma, t.agencia, t.estado,
               t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin,
               tu.estado, c.id, c.estado, c.version, c.fecha_inicio, c.fecha_finalizacion
@@ -202,7 +202,7 @@ webApi.post('/mi/tomas/:id/iniciar', requireWebUser, requirePermission('count'),
       `SELECT t.id, t.nombre_toma, t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin
        FROM tomas_fisicas t
        INNER JOIN toma_usuarios tu ON tu.toma_id = t.id
-       WHERE t.id = $1 AND tu.usuario_id = $2 AND t.estado = 'abierta'
+       WHERE t.id = $1 AND tu.usuario_id = $2 AND t.estado = 'abierta' AND tu.estado != 'finalizado'
        FOR UPDATE`,
       [tomaId, req.user.id]
     );
@@ -212,7 +212,10 @@ webApi.post('/mi/tomas/:id/iniciar', requireWebUser, requirePermission('count'),
     }
     validateTomaWindow(toma);
 
-    const current = await db.query('SELECT id FROM conteos WHERE toma_id = $1 AND usuario_id = $2 LIMIT 1', [tomaId, req.user.id]);
+    const current = await db.query('SELECT id, estado FROM conteos WHERE toma_id = $1 AND usuario_id = $2 LIMIT 1', [tomaId, req.user.id]);
+    if (current.rows[0] && current.rows[0].estado !== 'borrador') {
+      throw new AppError('Conteo no disponible', 422);
+    }
     let id = current.rows[0]?.id;
     if (!id) {
       const created = await db.query(
@@ -238,7 +241,12 @@ webApi.get('/mi/conteos/:id', requireWebUser, requirePermission('count'), asyncH
             t.agencia, t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin
      FROM conteos c
      INNER JOIN tomas_fisicas t ON t.id = c.toma_id
-     WHERE c.id = $1 AND c.usuario_id = $2
+     INNER JOIN toma_usuarios tu ON tu.toma_id = c.toma_id AND tu.usuario_id = c.usuario_id
+     WHERE c.id = $1
+       AND c.usuario_id = $2
+       AND c.estado = 'borrador'
+       AND t.estado = 'abierta'
+       AND tu.estado != 'finalizado'
      LIMIT 1`,
     [conteoId, req.user.id]
   );

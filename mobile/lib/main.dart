@@ -221,7 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             'IP',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 22,
+                              fontSize: 20,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -234,7 +234,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: _blue,
-                        fontSize: 21,
+                        fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -245,7 +245,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: TextStyle(
                         color: _blue,
                         fontWeight: FontWeight.w700,
-                        fontSize: 14,
+                        fontSize: 13,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -258,6 +258,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextField(
                       controller: apiCtrl,
                       keyboardType: TextInputType.url,
+                      style: const TextStyle(fontSize: 13),
                       decoration: const InputDecoration(
                         labelText: 'URL del servidor',
                         prefixIcon: Icon(Icons.link, color: _primary),
@@ -266,6 +267,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 16),
                     TextField(
                       controller: userCtrl,
+                      style: const TextStyle(fontSize: 13),
                       decoration: const InputDecoration(
                         labelText: 'Usuario',
                         prefixIcon: Icon(Icons.person_outline, color: _primary),
@@ -275,6 +277,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextField(
                       controller: passCtrl,
                       obscureText: true,
+                      style: const TextStyle(fontSize: 13),
                       decoration: const InputDecoration(
                         labelText: 'Contrasena',
                         prefixIcon: Icon(Icons.lock_outline, color: _primary),
@@ -514,13 +517,9 @@ class _OperationHomeState extends State<OperationHome> {
     qtyFocusNodes.putIfAbsent(product.id, FocusNode.new);
     setState(() {
       if (index != -1) {
-        final currentItem = items[index];
-        final updatedItem = currentItem.copyWith(
-          cantidad: currentItem.cantidad + 1,
-        );
-        items = List<CountItem>.from(items)..[index] = updatedItem;
         _toast(
-          'Cantidad incrementada: ${product.codigo} (${updatedItem.cantidad.toStringAsFixed(0)})',
+          'Producto duplicado. Cambie la cantidad si necesita ajustar.',
+          isWarning: true,
         );
       } else {
         items = [
@@ -528,18 +527,19 @@ class _OperationHomeState extends State<OperationHome> {
             productoId: product.id,
             codigo: product.codigo,
             descripcion: product.descripcion,
-            cantidad: 1,
+            cantidad: 0,
           ),
           ...items,
         ];
-        _toast('Producto agregado: ${product.codigo}');
+        saveStatus = 'Cambios pendientes...';
+        _hasUnsavedChanges = true;
       }
       results = [];
       searchCtrl.clear();
-      saveStatus = 'Cambios pendientes...';
-      _hasUnsavedChanges = true;
     });
-    _persistLocalDraft();
+    if (index == -1) {
+      _persistLocalDraft();
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final qtyFocus = qtyFocusNodes[product.id];
@@ -694,6 +694,21 @@ class _OperationHomeState extends State<OperationHome> {
     return [cleanDate, cleanHour].where((part) => part.isNotEmpty).join(' ');
   }
 
+  Future<void> _backToTomaList() async {
+    await _persistLocalDraft();
+    autoSaveTimer?.cancel();
+    autoSaveTimer = null;
+    setState(() {
+      conteo = null;
+      items = [];
+      results = [];
+      searchCtrl.clear();
+      saveStatus = 'Sin cambios recientes.';
+      _hasUnsavedChanges = false;
+    });
+    await _loadTomas();
+  }
+
   @override
   Widget build(BuildContext context) {
     final current = conteo;
@@ -701,6 +716,13 @@ class _OperationHomeState extends State<OperationHome> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
+        leading: current == null
+            ? null
+            : IconButton(
+                tooltip: 'Volver',
+                onPressed: _backToTomaList,
+                icon: const Icon(Icons.arrow_back, color: _blue),
+              ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -708,7 +730,7 @@ class _OperationHomeState extends State<OperationHome> {
               widget.user.nombre,
               style: const TextStyle(
                 color: _blue,
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -716,7 +738,7 @@ class _OperationHomeState extends State<OperationHome> {
               current == null ? 'Conteo' : 'Conteo y Borradores',
               style: const TextStyle(
                 color: _blue,
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -787,7 +809,7 @@ class _OperationHomeState extends State<OperationHome> {
                   'Conteos disponibles',
                   style: TextStyle(
                     color: _blue,
-                    fontSize: 15,
+                    fontSize: 13,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -817,7 +839,7 @@ class _OperationHomeState extends State<OperationHome> {
                                     _title(toma.numeroToma),
                                     style: const TextStyle(
                                       color: _blue,
-                                      fontSize: 15,
+                                      fontSize: 13,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
@@ -826,6 +848,7 @@ class _OperationHomeState extends State<OperationHome> {
                                     'AGENCIA: ${toma.agencia}',
                                     style: const TextStyle(
                                       color: _blue,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
@@ -833,6 +856,7 @@ class _OperationHomeState extends State<OperationHome> {
                                     'HABILITACION: ${_period(toma.fechaHabilitacion, toma.horaInicio)}',
                                     style: const TextStyle(
                                       color: _blue,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
@@ -840,6 +864,7 @@ class _OperationHomeState extends State<OperationHome> {
                                     'FINALIZACION: ${_period(toma.fechaCierre, toma.horaFin)}',
                                     style: const TextStyle(
                                       color: _blue,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
@@ -883,7 +908,11 @@ class _OperationHomeState extends State<OperationHome> {
                   SizedBox(width: 6),
                   Text(
                     'OPERACION ACTIVA',
-                    style: TextStyle(color: _blue, fontWeight: FontWeight.w900),
+                    style: TextStyle(
+                      color: _blue,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ],
               ),
@@ -892,7 +921,7 @@ class _OperationHomeState extends State<OperationHome> {
                 _title(current.numeroToma),
                 style: const TextStyle(
                   color: _blue,
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -901,6 +930,7 @@ class _OperationHomeState extends State<OperationHome> {
                 saveStatus,
                 style: const TextStyle(
                   color: Colors.black87,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -945,6 +975,7 @@ class _OperationHomeState extends State<OperationHome> {
               TextField(
                 controller: searchCtrl,
                 focusNode: searchFocus,
+                style: const TextStyle(fontSize: 13),
                 decoration: const InputDecoration(
                   hintText: 'Codigo o descripcion',
                   prefixIcon: Icon(Icons.search),
@@ -969,6 +1000,7 @@ class _OperationHomeState extends State<OperationHome> {
                               product.codigo,
                               style: const TextStyle(
                                 color: _blue,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
@@ -976,6 +1008,7 @@ class _OperationHomeState extends State<OperationHome> {
                               product.descripcion,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
                             ),
                             trailing: const Icon(
                               Icons.add_circle_outline,
@@ -1002,7 +1035,7 @@ class _OperationHomeState extends State<OperationHome> {
                       'Productos contados',
                       style: TextStyle(
                         color: _blue,
-                        fontSize: 15,
+                        fontSize: 13,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -1049,6 +1082,7 @@ class _OperationHomeState extends State<OperationHome> {
                               item.codigo,
                               style: const TextStyle(
                                 color: _blue,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
@@ -1057,6 +1091,7 @@ class _OperationHomeState extends State<OperationHome> {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
+                                fontSize: 12,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -1069,6 +1104,7 @@ class _OperationHomeState extends State<OperationHome> {
                         child: TextFormField(
                           key: ValueKey('${item.productoId}-${item.cantidad}'),
                           focusNode: qtyFocus,
+                          style: const TextStyle(fontSize: 13),
                           initialValue: item.cantidad.toStringAsFixed(
                             item.cantidad.truncateToDouble() == item.cantidad
                                 ? 0
@@ -1270,7 +1306,7 @@ class PageHeading extends StatelessWidget {
           kicker,
           style: const TextStyle(
             color: _blue,
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -1278,7 +1314,7 @@ class PageHeading extends StatelessWidget {
           title,
           style: const TextStyle(
             color: _blue,
-            fontSize: 22,
+            fontSize: 20,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -1310,7 +1346,11 @@ class InfoChip extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(color: _blue, fontWeight: FontWeight.w800),
+              style: const TextStyle(
+                color: _blue,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
