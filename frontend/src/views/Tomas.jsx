@@ -338,12 +338,6 @@ export function Tomas({ request, token }) {
 
   return (
     <div className="users-page tomas-page">
-      <div className="admin-page-heading">
-        <div>
-          <p>CONTEO FISICO</p>
-          <h2>Crear toma fisica</h2>
-        </div>
-      </div>
       <FeedbackToast message={message} error={error} onClose={() => { setMessage(''); setError(''); }} />
 
       <section className="panel toma-create-panel">

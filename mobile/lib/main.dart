@@ -144,13 +144,33 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  late final apiCtrl = TextEditingController(text: widget.apiBaseUrl);
   final userCtrl = TextEditingController();
   final passCtrl = TextEditingController();
   bool loading = false;
 
+  @override
+  void dispose() {
+    apiCtrl.dispose();
+    userCtrl.dispose();
+    passCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _login() async {
+    final apiUrl = apiCtrl.text.trim();
+    if (apiUrl.isEmpty) {
+      _toast('La URL del servidor es requerida', warning: true);
+      return;
+    }
+    if (!apiUrl.startsWith('http://') && !apiUrl.startsWith('https://')) {
+      _toast('La URL debe comenzar con http:// o https://', warning: true);
+      return;
+    }
+
     setState(() => loading = true);
     try {
+      await widget.onApiBaseUrlChanged(apiUrl);
       final session = await widget.api.login(
         userCtrl.text.trim(),
         passCtrl.text,
@@ -201,7 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             'IP',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 26,
+                              fontSize: 22,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -214,25 +234,42 @@ class _LoginScreenState extends State<LoginScreen> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: _blue,
-                        fontSize: 24,
+                        fontSize: 21,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Sistema de Conteo',
+                      'Sistema de inventario',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _blue,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Ingrese sus credenciales',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.black54),
                     ),
                     const SizedBox(height: 18),
-                    ApiSettingsTile(
-                      apiBaseUrl: widget.apiBaseUrl,
-                      onChanged: widget.onApiBaseUrlChanged,
+                    TextField(
+                      controller: apiCtrl,
+                      keyboardType: TextInputType.url,
+                      decoration: const InputDecoration(
+                        labelText: 'URL del servidor',
+                        prefixIcon: Icon(Icons.link, color: _primary),
+                      ),
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 16),
                     TextField(
                       controller: userCtrl,
-                      decoration: const InputDecoration(labelText: 'Usuario'),
+                      decoration: const InputDecoration(
+                        labelText: 'Usuario',
+                        prefixIcon: Icon(Icons.person_outline, color: _primary),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     TextField(
@@ -240,6 +277,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       obscureText: true,
                       decoration: const InputDecoration(
                         labelText: 'Contrasena',
+                        prefixIcon: Icon(Icons.lock_outline, color: _primary),
                       ),
                       onSubmitted: (_) => _login(),
                     ),
@@ -254,7 +292,25 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 13),
-                        child: Text(loading ? 'Ingresando...' : 'Ingresar'),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (loading)
+                              const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            else ...[
+                              const Icon(Icons.login, size: 18),
+                              const SizedBox(width: 8),
+                            ],
+                            Text(loading ? 'Ingresando...' : 'Ingresar'),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -297,11 +353,13 @@ class _OperationHomeState extends State<OperationHome> {
   List<Product> results = [];
   final searchCtrl = TextEditingController();
   final searchFocus = FocusNode();
+  final Map<int, FocusNode> qtyFocusNodes = {};
   Timer? searchTimer;
   Timer? autoSaveTimer;
   bool loading = true;
   bool saving = false;
   String saveStatus = 'Sin cambios recientes.';
+  bool _hasUnsavedChanges = false;
 
   @override
   void initState() {
@@ -315,6 +373,9 @@ class _OperationHomeState extends State<OperationHome> {
     autoSaveTimer?.cancel();
     searchCtrl.dispose();
     searchFocus.dispose();
+    for (final node in qtyFocusNodes.values) {
+      node.dispose();
+    }
     super.dispose();
   }
 
@@ -344,11 +405,12 @@ class _OperationHomeState extends State<OperationHome> {
         items = localDraft?.items ?? detail.items;
         results = [];
         searchCtrl.clear();
+        _hasUnsavedChanges = localDraft != null;
         saveStatus = localDraft == null
             ? 'Sin cambios recientes.'
             : 'Borrador local pendiente de sincronizar.';
       });
-      _scheduleAutoSave();
+      _startPeriodicAutoSave();
     } catch (err) {
       _toast('$err', isError: true);
     } finally {
@@ -369,7 +431,18 @@ class _OperationHomeState extends State<OperationHome> {
       final cached = await widget.store.readSearch(term);
       if (cached != null) {
         if (mounted) {
-          setState(() => results = cached);
+          Product? exactMatch;
+          for (final p in cached) {
+            if (p.codigo.trim().toLowerCase() == term) {
+              exactMatch = p;
+              break;
+            }
+          }
+          if (exactMatch != null) {
+            _addOrIncrementProduct(exactMatch);
+          } else {
+            setState(() => results = cached);
+          }
         }
         return;
       }
@@ -377,7 +450,18 @@ class _OperationHomeState extends State<OperationHome> {
         final data = await widget.api.searchProducts(term);
         await widget.store.saveSearch(term, data);
         if (mounted) {
-          setState(() => results = data);
+          Product? exactMatch;
+          for (final p in data) {
+            if (p.codigo.trim().toLowerCase() == term) {
+              exactMatch = p;
+              break;
+            }
+          }
+          if (exactMatch != null) {
+            _addOrIncrementProduct(exactMatch);
+          } else {
+            setState(() => results = data);
+          }
         }
       } catch (err) {
         _toast('$err', isError: true);
@@ -385,28 +469,84 @@ class _OperationHomeState extends State<OperationHome> {
     });
   }
 
-  void _addProduct(Product product) {
-    final exists = items.any((item) => item.productoId == product.id);
-    if (exists) {
-      _toast('Producto ya ingresado en este conteo.', isWarning: true);
-      return;
+  Future<void> _handleSearchSubmit(String value) async {
+    searchTimer?.cancel();
+    final term = value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+    if (term.isEmpty) return;
+
+    setState(() => loading = true);
+    try {
+      final data = await widget.api.searchProducts(term);
+      if (mounted) {
+        Product? exactMatch;
+        for (final p in data) {
+          if (p.codigo.trim().toLowerCase() == term) {
+            exactMatch = p;
+            break;
+          }
+        }
+        if (exactMatch == null && data.length == 1) {
+          exactMatch = data.first;
+        }
+
+        if (exactMatch != null) {
+          _addOrIncrementProduct(exactMatch);
+        } else {
+          setState(() {
+            results = data;
+          });
+          if (data.isEmpty) {
+            _toast('No se encontraron productos.', isWarning: true);
+          }
+        }
+      }
+    } catch (err) {
+      _toast('$err', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
+  }
+
+  void _addOrIncrementProduct(Product product) {
+    final index = items.indexWhere((item) => item.productoId == product.id);
+    qtyFocusNodes.putIfAbsent(product.id, FocusNode.new);
     setState(() {
-      items = [
-        CountItem(
-          productoId: product.id,
-          codigo: product.codigo,
-          descripcion: product.descripcion,
-          cantidad: 1,
-        ),
-        ...items,
-      ];
+      if (index != -1) {
+        final currentItem = items[index];
+        final updatedItem = currentItem.copyWith(
+          cantidad: currentItem.cantidad + 1,
+        );
+        items = List<CountItem>.from(items)..[index] = updatedItem;
+        _toast(
+          'Cantidad incrementada: ${product.codigo} (${updatedItem.cantidad.toStringAsFixed(0)})',
+        );
+      } else {
+        items = [
+          CountItem(
+            productoId: product.id,
+            codigo: product.codigo,
+            descripcion: product.descripcion,
+            cantidad: 1,
+          ),
+          ...items,
+        ];
+        _toast('Producto agregado: ${product.codigo}');
+      }
       results = [];
       searchCtrl.clear();
       saveStatus = 'Cambios pendientes...';
+      _hasUnsavedChanges = true;
     });
     _persistLocalDraft();
-    _scheduleAutoSave();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final qtyFocus = qtyFocusNodes[product.id];
+      if (qtyFocus != null && qtyFocus.canRequestFocus) {
+        qtyFocus.requestFocus();
+      }
+    });
   }
 
   void _updateQty(int productoId, String value) {
@@ -420,18 +560,19 @@ class _OperationHomeState extends State<OperationHome> {
           )
           .toList();
       saveStatus = 'Cambios pendientes...';
+      _hasUnsavedChanges = true;
     });
     _persistLocalDraft();
-    _scheduleAutoSave();
   }
 
   void _removeItem(int productoId) {
     setState(() {
       items = items.where((item) => item.productoId != productoId).toList();
       saveStatus = 'Cambios pendientes...';
+      _hasUnsavedChanges = true;
     });
+    qtyFocusNodes.remove(productoId)?.dispose();
     _persistLocalDraft();
-    _scheduleAutoSave();
   }
 
   List<CountItem> get validItems =>
@@ -445,15 +586,16 @@ class _OperationHomeState extends State<OperationHome> {
     await widget.store.saveDraft(current.id, current.version, items);
   }
 
-  void _scheduleAutoSave() {
+  void _startPeriodicAutoSave() {
     autoSaveTimer?.cancel();
-    if (conteo == null || validItems.isEmpty) {
-      return;
-    }
-    autoSaveTimer = Timer(
-      const Duration(minutes: 3),
-      () => _saveDraft(silent: true),
-    );
+    autoSaveTimer = Timer.periodic(const Duration(minutes: 3), (timer) {
+      if (_hasUnsavedChanges &&
+          conteo != null &&
+          validItems.isNotEmpty &&
+          !saving) {
+        _saveDraft(silent: true);
+      }
+    });
   }
 
   Future<void> _saveDraft({bool silent = false}) async {
@@ -475,6 +617,7 @@ class _OperationHomeState extends State<OperationHome> {
       setState(() {
         conteo = current.copyWith(version: version);
         saveStatus = 'Borrador guardado.';
+        _hasUnsavedChanges = false;
       });
       if (!silent) {
         _toast('Borrador guardado.');
@@ -491,7 +634,6 @@ class _OperationHomeState extends State<OperationHome> {
       if (mounted) {
         setState(() => saving = false);
       }
-      _scheduleAutoSave();
     }
   }
 
@@ -511,7 +653,10 @@ class _OperationHomeState extends State<OperationHome> {
         conteo = null;
         items = [];
         saveStatus = 'Sin cambios recientes.';
+        _hasUnsavedChanges = false;
       });
+      autoSaveTimer?.cancel();
+      autoSaveTimer = null;
       await _loadTomas();
       _toast('Conteo finalizado.');
     } catch (err) {
@@ -563,7 +708,7 @@ class _OperationHomeState extends State<OperationHome> {
               widget.user.nombre,
               style: const TextStyle(
                 color: _blue,
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -571,7 +716,7 @@ class _OperationHomeState extends State<OperationHome> {
               current == null ? 'Conteo' : 'Conteo y Borradores',
               style: const TextStyle(
                 color: _blue,
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -594,6 +739,32 @@ class _OperationHomeState extends State<OperationHome> {
           : current == null
           ? _buildTomaList()
           : _buildCount(current),
+      bottomNavigationBar: (loading || current == null)
+          ? null
+          : SafeArea(
+              child: Container(
+                color: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                child: OutlinedButton.icon(
+                  onPressed: saving || validItems.isEmpty
+                      ? null
+                      : () => _saveDraft(),
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Guardar borrador'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _blue,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    side: const BorderSide(color: _primary),
+                  ),
+                ),
+              ),
+            ),
     );
   }
 
@@ -616,7 +787,7 @@ class _OperationHomeState extends State<OperationHome> {
                   'Conteos disponibles',
                   style: TextStyle(
                     color: _blue,
-                    fontSize: 17,
+                    fontSize: 15,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -646,7 +817,7 @@ class _OperationHomeState extends State<OperationHome> {
                                     _title(toma.numeroToma),
                                     style: const TextStyle(
                                       color: _blue,
-                                      fontSize: 17,
+                                      fontSize: 15,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
@@ -721,7 +892,7 @@ class _OperationHomeState extends State<OperationHome> {
                 _title(current.numeroToma),
                 style: const TextStyle(
                   color: _blue,
-                  fontSize: 22,
+                  fontSize: 18,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -749,22 +920,6 @@ class _OperationHomeState extends State<OperationHome> {
                     'Cierre: ${_period(current.fechaCierre, current.horaFin)}',
               ),
               const SizedBox(height: 14),
-              OutlinedButton.icon(
-                onPressed: saving || validItems.isEmpty
-                    ? null
-                    : () => _saveDraft(),
-                icon: const Icon(Icons.save_outlined),
-                label: const Text('Guardar borrador'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _blue,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  side: const BorderSide(color: _primary),
-                ),
-              ),
-              const SizedBox(height: 10),
               FilledButton.icon(
                 onPressed: saving || validItems.isEmpty ? null : _finish,
                 icon: const Icon(Icons.check_circle_outline),
@@ -795,6 +950,7 @@ class _OperationHomeState extends State<OperationHome> {
                   prefixIcon: Icon(Icons.search),
                 ),
                 onChanged: _search,
+                onSubmitted: _handleSearchSubmit,
               ),
               if (results.isNotEmpty)
                 Container(
@@ -825,7 +981,7 @@ class _OperationHomeState extends State<OperationHome> {
                               Icons.add_circle_outline,
                               color: _primary,
                             ),
-                            onTap: () => _addProduct(product),
+                            onTap: () => _addOrIncrementProduct(product),
                           ),
                         )
                         .toList(),
@@ -846,7 +1002,7 @@ class _OperationHomeState extends State<OperationHome> {
                       'Productos contados',
                       style: TextStyle(
                         color: _blue,
-                        fontSize: 17,
+                        fontSize: 15,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -866,8 +1022,12 @@ class _OperationHomeState extends State<OperationHome> {
                     child: Text('Agregue productos para iniciar el conteo.'),
                   ),
                 ),
-              ...items.map(
-                (item) => Container(
+              ...items.map((item) {
+                final qtyFocus = qtyFocusNodes.putIfAbsent(
+                  item.productoId,
+                  FocusNode.new,
+                );
+                return Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
@@ -907,6 +1067,8 @@ class _OperationHomeState extends State<OperationHome> {
                       SizedBox(
                         width: 78,
                         child: TextFormField(
+                          key: ValueKey('${item.productoId}-${item.cantidad}'),
+                          focusNode: qtyFocus,
                           initialValue: item.cantidad.toStringAsFixed(
                             item.cantidad.truncateToDouble() == item.cantidad
                                 ? 0
@@ -928,8 +1090,8 @@ class _OperationHomeState extends State<OperationHome> {
                       ),
                     ],
                   ),
-                ),
-              ),
+                );
+              }),
             ],
           ),
         ),
@@ -1116,7 +1278,7 @@ class PageHeading extends StatelessWidget {
           title,
           style: const TextStyle(
             color: _blue,
-            fontSize: 25,
+            fontSize: 22,
             fontWeight: FontWeight.w900,
           ),
         ),

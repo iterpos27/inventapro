@@ -72,10 +72,7 @@ export function Usuarios({ request }) {
   return (
     <div className="users-page">
       <div className="admin-page-heading">
-        <div>
-          <p>ADMINISTRACION</p>
-          <h2>Usuarios</h2>
-        </div>
+        <div />
         <button className="primary admin-create-btn" type="button" onClick={() => { resetUserForm(); setModalOpen(true); }}>
           <UserPlus size={16} />
           Crear usuario

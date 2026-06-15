@@ -84,7 +84,9 @@ mobileApi.post('/logout', asyncHandler(async (req, res) => {
 }));
 
 mobileApi.get('/tomas', requireApiUser, asyncHandler(async (req, res) => {
-  await closeExpiredTomas(pool);
+  closeExpiredTomas(pool).catch((err) => {
+    console.error('Error en segundo plano al cerrar tomas vencidas (mobileApi):', err);
+  });
   const { rows } = await pool.query(
     `SELECT t.id AS toma_id, t.numero_toma, t.nombre_toma, t.agencia, t.estado AS toma_estado,
             t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin,

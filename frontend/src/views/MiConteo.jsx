@@ -298,12 +298,6 @@ export function MiConteo({ request }) {
   if (!conteo) {
     return (
       <div className="user-conteo-shell user-conteo-select">
-        <div className="admin-page-heading user-conteo-heading">
-          <div>
-            <p>CONTEO FISICO</p>
-            <h2>Seleccionar conteo</h2>
-          </div>
-        </div>
 
         <section className="panel count-panel available-counts-panel">
           <div className="section-title">

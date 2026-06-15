@@ -129,10 +129,7 @@ export function Productos({ request }) {
   return (
     <div className="users-page products-page">
       <div className="admin-page-heading">
-        <div>
-          <p>CATALOGO</p>
-          <h2>Productos</h2>
-        </div>
+        <div />
         <div className="product-heading-actions">
           <label className="outline-action product-import-btn">
             <Download size={16} />

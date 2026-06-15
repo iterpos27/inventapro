@@ -303,10 +303,7 @@ export function Conteos({ request, token }) {
   return (
     <div className="users-page reports-page">
       <div className="admin-page-heading">
-        <div>
-          <p>AUDITORIA</p>
-          <h2>Reportes</h2>
-        </div>
+        <div />
       </div>
 
       <section className="panel users-card report-card">

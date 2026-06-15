@@ -43,7 +43,6 @@ export function Dashboard({ request, setRoute }) {
 
   return (
     <div className="dashboard-view compact-dashboard">
-      <h2>Panel de control</h2>
       <section className="grid metrics">
         {cards.map(([label, value]) => (
           <article className="metric" key={label}>

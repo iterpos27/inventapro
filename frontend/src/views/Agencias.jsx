@@ -79,10 +79,7 @@ export function Agencias({ request }) {
   return (
     <div className="users-page">
       <div className="admin-page-heading">
-        <div>
-          <p>ADMINISTRACION</p>
-          <h2>Agencias</h2>
-        </div>
+        <div />
         <button className="primary admin-create-btn" type="button" onClick={() => { resetAgencyForm(); setModalOpen(true); }}>
           <Building2 size={16} />
           Crear agencia
