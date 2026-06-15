@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Menu, UserCircle, LogOut } from 'lucide-react';
+import { ChevronDown, Menu, UserCircle, LogOut } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { api } from './services/api';
 import { navForUser } from './constants/navigation';
@@ -84,7 +84,12 @@ export default function App() {
               aria-label="Abrir menu de usuario"
               title={user?.nombre || 'Usuario'}
             >
-              <UserCircle size={22} />
+              <UserCircle size={20} />
+              <span>
+                <strong>{user?.nombre || 'Administrador'}</strong>
+                <small>{roleLabel(user?.rol)}</small>
+              </span>
+              <ChevronDown className="account-chevron" size={16} />
             </button>
             {accountOpen ? (
               <div className="account-popover">
@@ -96,7 +101,7 @@ export default function App() {
             ) : null}
           </div>
         </header>
-        <Current request={request} user={user} token={token} />
+        <Current request={request} user={user} token={token} setRoute={setRoute} />
       </main>
     </div>
   );

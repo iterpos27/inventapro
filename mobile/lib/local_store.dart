@@ -7,6 +7,7 @@ import 'models.dart';
 class LocalStore {
   static const _tokenKey = 'session_token';
   static const _userKey = 'session_user';
+  static const _apiBaseUrlKey = 'api_base_url';
   static const _draftPrefix = 'draft_conteo_';
   static const _searchPrefix = 'search_';
 
@@ -33,7 +34,21 @@ class LocalStore {
     await prefs.remove(_userKey);
   }
 
-  Future<void> saveDraft(int conteoId, int version, List<CountItem> items) async {
+  Future<void> saveApiBaseUrl(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_apiBaseUrlKey, value.trim());
+  }
+
+  Future<String?> readApiBaseUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_apiBaseUrlKey);
+  }
+
+  Future<void> saveDraft(
+    int conteoId,
+    int version,
+    List<CountItem> items,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       '$_draftPrefix$conteoId',
@@ -45,7 +60,9 @@ class LocalStore {
     );
   }
 
-  Future<({int version, List<CountItem> items})?> readDraft(int conteoId) async {
+  Future<({int version, List<CountItem> items})?> readDraft(
+    int conteoId,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('$_draftPrefix$conteoId');
     if (raw == null) return null;
@@ -53,7 +70,9 @@ class LocalStore {
     final list = data['items'] is List ? data['items'] as List : const [];
     return (
       version: int.tryParse('${data['version'] ?? 0}') ?? 0,
-      items: list.map((item) => CountItem.fromJson(Map<String, dynamic>.from(item))).toList(),
+      items: list
+          .map((item) => CountItem.fromJson(Map<String, dynamic>.from(item)))
+          .toList(),
     );
   }
 
@@ -66,11 +85,17 @@ class LocalStore {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       '$_searchPrefix$term',
-      jsonEncode(products.map((item) => {
-            'id': item.id,
-            'codigo': item.codigo,
-            'descripcion': item.descripcion,
-          }).toList()),
+      jsonEncode(
+        products
+            .map(
+              (item) => {
+                'id': item.id,
+                'codigo': item.codigo,
+                'descripcion': item.descripcion,
+              },
+            )
+            .toList(),
+      ),
     );
   }
 
@@ -80,6 +105,8 @@ class LocalStore {
     if (raw == null) return null;
     final list = jsonDecode(raw);
     if (list is! List) return null;
-    return list.map((item) => Product.fromJson(Map<String, dynamic>.from(item))).toList();
+    return list
+        .map((item) => Product.fromJson(Map<String, dynamic>.from(item)))
+        .toList();
   }
 }

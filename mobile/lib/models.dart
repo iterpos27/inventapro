@@ -21,11 +21,11 @@ class SessionUser {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'nombre': nombre,
-        'usuario': usuario,
-        'rol': rol,
-      };
+    'id': id,
+    'nombre': nombre,
+    'usuario': usuario,
+    'rol': rol,
+  };
 }
 
 class CountSession {
@@ -61,7 +61,9 @@ class Toma {
   factory Toma.fromJson(Map<String, dynamic> json) {
     return Toma(
       tomaId: int.tryParse('${json['toma_id']}') ?? 0,
-      conteoId: json['conteo_id'] == null ? null : int.tryParse('${json['conteo_id']}'),
+      conteoId: json['conteo_id'] == null
+          ? null
+          : int.tryParse('${json['conteo_id']}'),
       numeroToma: '${json['numero_toma'] ?? json['nombre_toma'] ?? ''}',
       agencia: '${json['agencia'] ?? ''}',
       fechaHabilitacion: '${json['fecha_habilitacion'] ?? ''}',
@@ -113,7 +115,9 @@ class ConteoInfo {
   factory ConteoInfo.fromJson(Map<String, dynamic> json) {
     return ConteoInfo(
       id: int.tryParse('${json['id'] ?? json['conteo_id']}') ?? 0,
-      version: int.tryParse('${json['version'] ?? json['conteo_version'] ?? 0}') ?? 0,
+      version:
+          int.tryParse('${json['version'] ?? json['conteo_version'] ?? 0}') ??
+          0,
       numeroToma: '${json['numero_toma'] ?? json['nombre_toma'] ?? ''}',
       agencia: '${json['agencia'] ?? ''}',
       fechaHabilitacion: '${json['fecha_habilitacion'] ?? ''}',
@@ -177,9 +181,9 @@ class CountItem {
   }
 
   Map<String, dynamic> toJson() => {
-        'producto_id': productoId,
-        'codigo': codigo,
-        'descripcion': descripcion,
-        'cantidad': cantidad,
-      };
+    'producto_id': productoId,
+    'codigo': codigo,
+    'descripcion': descripcion,
+    'cantidad': cantidad,
+  };
 }

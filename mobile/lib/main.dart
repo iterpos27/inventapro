@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'api_client.dart';
+import 'config.dart';
 import 'local_store.dart';
 import 'models.dart';
 
@@ -60,6 +61,7 @@ class _AppShellState extends State<AppShell> {
   final api = ApiClient();
   final store = LocalStore();
   CountSession? session;
+  String apiBaseUrl = AppConfig.defaultApiBaseUrl;
   bool loading = true;
 
   @override
@@ -69,12 +71,22 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _restore() async {
+    final savedApiBaseUrl = await store.readApiBaseUrl();
+    api.setApiBaseUrl(savedApiBaseUrl ?? AppConfig.defaultApiBaseUrl);
     final saved = await store.readSession();
     api.token = saved?.token;
     setState(() {
+      apiBaseUrl = api.apiBaseUrl;
       session = saved;
       loading = false;
     });
+  }
+
+  Future<void> _saveApiBaseUrl(String value) async {
+    final clean = value.trim();
+    await store.saveApiBaseUrl(clean);
+    api.setApiBaseUrl(clean);
+    setState(() => apiBaseUrl = clean);
   }
 
   Future<void> _setSession(CountSession next) async {
@@ -95,21 +107,36 @@ class _AppShellState extends State<AppShell> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (session == null) {
-      return LoginScreen(api: api, onLogin: _setSession);
+      return LoginScreen(
+        api: api,
+        apiBaseUrl: apiBaseUrl,
+        onApiBaseUrlChanged: _saveApiBaseUrl,
+        onLogin: _setSession,
+      );
     }
     return OperationHome(
       api: api,
       store: store,
       user: session!.user,
+      apiBaseUrl: apiBaseUrl,
+      onApiBaseUrlChanged: _saveApiBaseUrl,
       onLogout: _logout,
     );
   }
 }
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.api, required this.onLogin});
+  const LoginScreen({
+    super.key,
+    required this.api,
+    required this.apiBaseUrl,
+    required this.onApiBaseUrlChanged,
+    required this.onLogin,
+  });
 
   final ApiClient api;
+  final String apiBaseUrl;
+  final Future<void> Function(String value) onApiBaseUrlChanged;
   final Future<void> Function(CountSession session) onLogin;
 
   @override
@@ -124,12 +151,17 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login() async {
     setState(() => loading = true);
     try {
-      final session = await widget.api.login(userCtrl.text.trim(), passCtrl.text);
+      final session = await widget.api.login(
+        userCtrl.text.trim(),
+        passCtrl.text,
+      );
       await widget.onLogin(session);
     } catch (err) {
       _toast('$err', warning: false);
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 
@@ -167,7 +199,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: const Center(
                           child: Text(
                             'IP',
-                            style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
                       ),
@@ -176,23 +212,46 @@ class _LoginScreenState extends State<LoginScreen> {
                     const Text(
                       'INVENTAPRO',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: _blue, fontSize: 24, fontWeight: FontWeight.w900),
+                      style: TextStyle(
+                        color: _blue,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                     const SizedBox(height: 4),
-                    const Text('Sistema de Conteo', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54)),
+                    const Text(
+                      'Sistema de Conteo',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.black54),
+                    ),
+                    const SizedBox(height: 18),
+                    ApiSettingsTile(
+                      apiBaseUrl: widget.apiBaseUrl,
+                      onChanged: widget.onApiBaseUrlChanged,
+                    ),
                     const SizedBox(height: 28),
-                    TextField(controller: userCtrl, decoration: const InputDecoration(labelText: 'Usuario')),
+                    TextField(
+                      controller: userCtrl,
+                      decoration: const InputDecoration(labelText: 'Usuario'),
+                    ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: passCtrl,
                       obscureText: true,
-                      decoration: const InputDecoration(labelText: 'Contrasena'),
+                      decoration: const InputDecoration(
+                        labelText: 'Contrasena',
+                      ),
                       onSubmitted: (_) => _login(),
                     ),
                     const SizedBox(height: 22),
                     FilledButton(
                       onPressed: loading ? null : _login,
-                      style: FilledButton.styleFrom(backgroundColor: _primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 13),
                         child: Text(loading ? 'Ingresando...' : 'Ingresar'),
@@ -215,12 +274,16 @@ class OperationHome extends StatefulWidget {
     required this.api,
     required this.store,
     required this.user,
+    required this.apiBaseUrl,
+    required this.onApiBaseUrlChanged,
     required this.onLogout,
   });
 
   final ApiClient api;
   final LocalStore store;
   final SessionUser user;
+  final String apiBaseUrl;
+  final Future<void> Function(String value) onApiBaseUrlChanged;
   final Future<void> Function() onLogout;
 
   @override
@@ -263,14 +326,17 @@ class _OperationHomeState extends State<OperationHome> {
     } catch (err) {
       _toast('$err', isError: true);
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 
   Future<void> _openToma(Toma toma) async {
     setState(() => loading = true);
     try {
-      final conteoId = toma.conteoId ?? await widget.api.iniciarConteo(toma.tomaId);
+      final conteoId =
+          toma.conteoId ?? await widget.api.iniciarConteo(toma.tomaId);
       final detail = await widget.api.detalleConteo(conteoId, toma);
       final localDraft = await widget.store.readDraft(conteoId);
       setState(() {
@@ -278,13 +344,17 @@ class _OperationHomeState extends State<OperationHome> {
         items = localDraft?.items ?? detail.items;
         results = [];
         searchCtrl.clear();
-        saveStatus = localDraft == null ? 'Sin cambios recientes.' : 'Borrador local pendiente de sincronizar.';
+        saveStatus = localDraft == null
+            ? 'Sin cambios recientes.'
+            : 'Borrador local pendiente de sincronizar.';
       });
       _scheduleAutoSave();
     } catch (err) {
       _toast('$err', isError: true);
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 
@@ -298,13 +368,17 @@ class _OperationHomeState extends State<OperationHome> {
     searchTimer = Timer(const Duration(milliseconds: 450), () async {
       final cached = await widget.store.readSearch(term);
       if (cached != null) {
-        if (mounted) setState(() => results = cached);
+        if (mounted) {
+          setState(() => results = cached);
+        }
         return;
       }
       try {
         final data = await widget.api.searchProducts(term);
         await widget.store.saveSearch(term, data);
-        if (mounted) setState(() => results = data);
+        if (mounted) {
+          setState(() => results = data);
+        }
       } catch (err) {
         _toast('$err', isError: true);
       }
@@ -319,7 +393,12 @@ class _OperationHomeState extends State<OperationHome> {
     }
     setState(() {
       items = [
-        CountItem(productoId: product.id, codigo: product.codigo, descripcion: product.descripcion, cantidad: 1),
+        CountItem(
+          productoId: product.id,
+          codigo: product.codigo,
+          descripcion: product.descripcion,
+          cantidad: 1,
+        ),
         ...items,
       ];
       results = [];
@@ -333,7 +412,13 @@ class _OperationHomeState extends State<OperationHome> {
   void _updateQty(int productoId, String value) {
     final qty = double.tryParse(value.replaceAll(',', '.')) ?? 0;
     setState(() {
-      items = items.map((item) => item.productoId == productoId ? item.copyWith(cantidad: qty) : item).toList();
+      items = items
+          .map(
+            (item) => item.productoId == productoId
+                ? item.copyWith(cantidad: qty)
+                : item,
+          )
+          .toList();
       saveStatus = 'Cambios pendientes...';
     });
     _persistLocalDraft();
@@ -349,48 +434,72 @@ class _OperationHomeState extends State<OperationHome> {
     _scheduleAutoSave();
   }
 
-  List<CountItem> get validItems => items.where((item) => item.cantidad > 0).toList();
+  List<CountItem> get validItems =>
+      items.where((item) => item.cantidad > 0).toList();
 
   Future<void> _persistLocalDraft() async {
     final current = conteo;
-    if (current == null) return;
+    if (current == null) {
+      return;
+    }
     await widget.store.saveDraft(current.id, current.version, items);
   }
 
   void _scheduleAutoSave() {
     autoSaveTimer?.cancel();
-    if (conteo == null || validItems.isEmpty) return;
-    autoSaveTimer = Timer(const Duration(minutes: 3), () => _saveDraft(silent: true));
+    if (conteo == null || validItems.isEmpty) {
+      return;
+    }
+    autoSaveTimer = Timer(
+      const Duration(minutes: 3),
+      () => _saveDraft(silent: true),
+    );
   }
 
   Future<void> _saveDraft({bool silent = false}) async {
     final current = conteo;
-    if (current == null || validItems.isEmpty || saving) return;
+    if (current == null || validItems.isEmpty || saving) {
+      return;
+    }
     setState(() {
       saving = true;
       saveStatus = 'Guardando borrador...';
     });
     try {
-      final version = await widget.api.guardarBorrador(current.id, current.version, validItems);
+      final version = await widget.api.guardarBorrador(
+        current.id,
+        current.version,
+        validItems,
+      );
       await widget.store.clearDraft(current.id);
       setState(() {
         conteo = current.copyWith(version: version);
         saveStatus = 'Borrador guardado.';
       });
-      if (!silent) _toast('Borrador guardado.');
+      if (!silent) {
+        _toast('Borrador guardado.');
+      }
     } catch (err) {
       await _persistLocalDraft();
-      setState(() => saveStatus = 'Borrador local guardado. Pendiente de sincronizar.');
-      if (!silent) _toast('$err', isWarning: true);
+      setState(
+        () => saveStatus = 'Borrador local guardado. Pendiente de sincronizar.',
+      );
+      if (!silent) {
+        _toast('$err', isWarning: true);
+      }
     } finally {
-      if (mounted) setState(() => saving = false);
+      if (mounted) {
+        setState(() => saving = false);
+      }
       _scheduleAutoSave();
     }
   }
 
   Future<void> _finish() async {
     final current = conteo;
-    if (current == null || validItems.isEmpty || saving) return;
+    if (current == null || validItems.isEmpty || saving) {
+      return;
+    }
     setState(() {
       saving = true;
       saveStatus = 'Finalizando conteo...';
@@ -409,14 +518,18 @@ class _OperationHomeState extends State<OperationHome> {
       await _persistLocalDraft();
       _toast('$err', isError: true);
     } finally {
-      if (mounted) setState(() => saving = false);
+      if (mounted) {
+        setState(() => saving = false);
+      }
     }
   }
 
   void _toast(String message, {bool isError = false, bool isWarning = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: isError ? _red : (isWarning ? const Color(0xffd99a00) : _green),
+        backgroundColor: isError
+            ? _red
+            : (isWarning ? const Color(0xffd99a00) : _green),
         content: Text(message),
       ),
     );
@@ -424,7 +537,9 @@ class _OperationHomeState extends State<OperationHome> {
 
   String _title(String raw) {
     final value = raw.trim();
-    if (value.toUpperCase().startsWith('TOMA FISICA #')) return value.toUpperCase();
+    if (value.toUpperCase().startsWith('TOMA FISICA #')) {
+      return value.toUpperCase();
+    }
     return 'TOMA FISICA # $value'.toUpperCase();
   }
 
@@ -444,11 +559,29 @@ class _OperationHomeState extends State<OperationHome> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.user.nombre, style: const TextStyle(color: _blue, fontSize: 13, fontWeight: FontWeight.w800)),
-            Text(current == null ? 'Conteo' : 'Conteo y Borradores', style: const TextStyle(color: _blue, fontSize: 18, fontWeight: FontWeight.w900)),
+            Text(
+              widget.user.nombre,
+              style: const TextStyle(
+                color: _blue,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            Text(
+              current == null ? 'Conteo' : 'Conteo y Borradores',
+              style: const TextStyle(
+                color: _blue,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ],
         ),
         actions: [
+          ApiSettingsIconButton(
+            apiBaseUrl: widget.apiBaseUrl,
+            onChanged: widget.onApiBaseUrlChanged,
+          ),
           IconButton(
             tooltip: 'Salir',
             onPressed: widget.onLogout,
@@ -459,8 +592,8 @@ class _OperationHomeState extends State<OperationHome> {
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : current == null
-              ? _buildTomaList()
-              : _buildCount(current),
+          ? _buildTomaList()
+          : _buildCount(current),
     );
   }
 
@@ -470,15 +603,26 @@ class _OperationHomeState extends State<OperationHome> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const PageHeading(kicker: 'CONTEO FISICO', title: 'Seleccionar conteo'),
+          const PageHeading(
+            kicker: 'CONTEO FISICO',
+            title: 'Seleccionar conteo',
+          ),
           const SizedBox(height: 12),
           CardBox(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('Conteos disponibles', style: TextStyle(color: _blue, fontSize: 17, fontWeight: FontWeight.w900)),
+                const Text(
+                  'Conteos disponibles',
+                  style: TextStyle(
+                    color: _blue,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
                 const SizedBox(height: 12),
-                if (tomas.isEmpty) const Text('No hay tomas abiertas asignadas.'),
+                if (tomas.isEmpty)
+                  const Text('No hay tomas abiertas asignadas.'),
                 ...tomas.map(
                   (toma) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
@@ -498,17 +642,48 @@ class _OperationHomeState extends State<OperationHome> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(_title(toma.numeroToma), style: const TextStyle(color: _blue, fontSize: 17, fontWeight: FontWeight.w900)),
+                                  Text(
+                                    _title(toma.numeroToma),
+                                    style: const TextStyle(
+                                      color: _blue,
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
                                   const SizedBox(height: 6),
-                                  Text('AGENCIA: ${toma.agencia}', style: const TextStyle(color: _blue, fontWeight: FontWeight.w800)),
-                                  Text('HABILITACION: ${_period(toma.fechaHabilitacion, toma.horaInicio)}', style: const TextStyle(color: _blue, fontWeight: FontWeight.w800)),
-                                  Text('FINALIZACION: ${_period(toma.fechaCierre, toma.horaFin)}', style: const TextStyle(color: _blue, fontWeight: FontWeight.w800)),
+                                  Text(
+                                    'AGENCIA: ${toma.agencia}',
+                                    style: const TextStyle(
+                                      color: _blue,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  Text(
+                                    'HABILITACION: ${_period(toma.fechaHabilitacion, toma.horaInicio)}',
+                                    style: const TextStyle(
+                                      color: _blue,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  Text(
+                                    'FINALIZACION: ${_period(toma.fechaCierre, toma.horaFin)}',
+                                    style: const TextStyle(
+                                      color: _blue,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
                                   const SizedBox(height: 8),
-                                  Text('${toma.lineas} lineas registradas - ${toma.conteoId == null ? 'Empezar' : 'Continuar'}'),
+                                  Text(
+                                    '${toma.lineas} lineas registradas - ${toma.conteoId == null ? 'Empezar' : 'Continuar'}',
+                                  ),
                                 ],
                               ),
                             ),
-                            const Icon(Icons.arrow_circle_right_outlined, color: _blue, size: 28),
+                            const Icon(
+                              Icons.arrow_circle_right_outlined,
+                              color: _blue,
+                              size: 28,
+                            ),
                           ],
                         ),
                       ),
@@ -535,26 +710,57 @@ class _OperationHomeState extends State<OperationHome> {
                 children: const [
                   Icon(Icons.play_circle_fill, color: _green, size: 14),
                   SizedBox(width: 6),
-                  Text('OPERACION ACTIVA', style: TextStyle(color: _blue, fontWeight: FontWeight.w900)),
+                  Text(
+                    'OPERACION ACTIVA',
+                    style: TextStyle(color: _blue, fontWeight: FontWeight.w900),
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
-              Text(_title(current.numeroToma), style: const TextStyle(color: _blue, fontSize: 22, fontWeight: FontWeight.w900)),
+              Text(
+                _title(current.numeroToma),
+                style: const TextStyle(
+                  color: _blue,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text(saveStatus, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
+              Text(
+                saveStatus,
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 10),
-              InfoChip(icon: Icons.apartment_outlined, label: 'Agencia: ${current.agencia}'),
-              InfoChip(icon: Icons.calendar_month_outlined, label: 'Habilitacion: ${_period(current.fechaHabilitacion, current.horaInicio)}'),
-              InfoChip(icon: Icons.event_available_outlined, label: 'Cierre: ${_period(current.fechaCierre, current.horaFin)}'),
+              InfoChip(
+                icon: Icons.apartment_outlined,
+                label: 'Agencia: ${current.agencia}',
+              ),
+              InfoChip(
+                icon: Icons.calendar_month_outlined,
+                label:
+                    'Habilitacion: ${_period(current.fechaHabilitacion, current.horaInicio)}',
+              ),
+              InfoChip(
+                icon: Icons.event_available_outlined,
+                label:
+                    'Cierre: ${_period(current.fechaCierre, current.horaFin)}',
+              ),
               const SizedBox(height: 14),
               OutlinedButton.icon(
-                onPressed: saving || validItems.isEmpty ? null : () => _saveDraft(),
+                onPressed: saving || validItems.isEmpty
+                    ? null
+                    : () => _saveDraft(),
                 icon: const Icon(Icons.save_outlined),
                 label: const Text('Guardar borrador'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _blue,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                   side: const BorderSide(color: _primary),
                 ),
               ),
@@ -566,7 +772,9 @@ class _OperationHomeState extends State<OperationHome> {
                 style: FilledButton.styleFrom(
                   backgroundColor: _green,
                   padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                 ),
               ),
             ],
@@ -582,21 +790,41 @@ class _OperationHomeState extends State<OperationHome> {
               TextField(
                 controller: searchCtrl,
                 focusNode: searchFocus,
-                decoration: const InputDecoration(hintText: 'Codigo o descripcion', prefixIcon: Icon(Icons.search)),
+                decoration: const InputDecoration(
+                  hintText: 'Codigo o descripcion',
+                  prefixIcon: Icon(Icons.search),
+                ),
                 onChanged: _search,
               ),
               if (results.isNotEmpty)
                 Container(
                   margin: const EdgeInsets.only(top: 8),
-                  decoration: BoxDecoration(color: Colors.white, border: Border.all(color: _border), borderRadius: BorderRadius.circular(6)),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: _border),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                   child: Column(
                     children: results
                         .map(
                           (product) => ListTile(
                             dense: true,
-                            title: Text(product.codigo, style: const TextStyle(color: _blue, fontWeight: FontWeight.w900)),
-                            subtitle: Text(product.descripcion, maxLines: 2, overflow: TextOverflow.ellipsis),
-                            trailing: const Icon(Icons.add_circle_outline, color: _primary),
+                            title: Text(
+                              product.codigo,
+                              style: const TextStyle(
+                                color: _blue,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            subtitle: Text(
+                              product.descripcion,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: const Icon(
+                              Icons.add_circle_outline,
+                              color: _primary,
+                            ),
                             onTap: () => _addProduct(product),
                           ),
                         )
@@ -613,15 +841,30 @@ class _OperationHomeState extends State<OperationHome> {
             children: [
               Row(
                 children: [
-                  const Expanded(child: Text('Productos contados', style: TextStyle(color: _blue, fontSize: 17, fontWeight: FontWeight.w900))),
-                  Chip(label: Text('${items.length}'), backgroundColor: const Color(0xffdcecff), side: BorderSide.none),
+                  const Expanded(
+                    child: Text(
+                      'Productos contados',
+                      style: TextStyle(
+                        color: _blue,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  Chip(
+                    label: Text('${items.length}'),
+                    backgroundColor: const Color(0xffdcecff),
+                    side: BorderSide.none,
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
               if (items.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 28),
-                  child: Center(child: Text('Agregue productos para iniciar el conteo.')),
+                  child: Center(
+                    child: Text('Agregue productos para iniciar el conteo.'),
+                  ),
                 ),
               ...items.map(
                 (item) => Container(
@@ -642,8 +885,21 @@ class _OperationHomeState extends State<OperationHome> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(item.codigo, style: const TextStyle(color: _blue, fontWeight: FontWeight.w900)),
-                            Text(item.descripcion, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+                            Text(
+                              item.codigo,
+                              style: const TextStyle(
+                                color: _blue,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            Text(
+                              item.descripcion,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -651,11 +907,23 @@ class _OperationHomeState extends State<OperationHome> {
                       SizedBox(
                         width: 78,
                         child: TextFormField(
-                          initialValue: item.cantidad.toStringAsFixed(item.cantidad.truncateToDouble() == item.cantidad ? 0 : 2),
+                          initialValue: item.cantidad.toStringAsFixed(
+                            item.cantidad.truncateToDouble() == item.cantidad
+                                ? 0
+                                : 2,
+                          ),
                           textAlign: TextAlign.center,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10)),
-                          onChanged: (value) => _updateQty(item.productoId, value),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: const InputDecoration(
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 10,
+                            ),
+                          ),
+                          onChanged: (value) =>
+                              _updateQty(item.productoId, value),
                         ),
                       ),
                     ],
@@ -668,6 +936,142 @@ class _OperationHomeState extends State<OperationHome> {
       ],
     );
   }
+}
+
+class ApiSettingsTile extends StatelessWidget {
+  const ApiSettingsTile({
+    super.key,
+    required this.apiBaseUrl,
+    required this.onChanged,
+  });
+
+  final String apiBaseUrl;
+  final Future<void> Function(String value) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(6),
+      onTap: () => showApiSettingsDialog(context, apiBaseUrl, onChanged),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xffeef6ff),
+          border: Border.all(color: _border),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.dns_outlined, color: _primary, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Servidor API',
+                    style: TextStyle(color: _blue, fontWeight: FontWeight.w900),
+                  ),
+                  Text(
+                    apiBaseUrl,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.black54, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.edit_outlined, color: _blue, size: 19),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ApiSettingsIconButton extends StatelessWidget {
+  const ApiSettingsIconButton({
+    super.key,
+    required this.apiBaseUrl,
+    required this.onChanged,
+  });
+
+  final String apiBaseUrl;
+  final Future<void> Function(String value) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Servidor API',
+      onPressed: () => showApiSettingsDialog(context, apiBaseUrl, onChanged),
+      icon: const Icon(Icons.dns_outlined, color: _blue),
+    );
+  }
+}
+
+Future<void> showApiSettingsDialog(
+  BuildContext context,
+  String currentValue,
+  Future<void> Function(String value) onChanged,
+) async {
+  final controller = TextEditingController(text: currentValue);
+  final focusNode = FocusNode();
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      String? errorText;
+      return StatefulBuilder(
+        builder: (stateContext, setDialogState) {
+          return AlertDialog(
+            title: const Text('Servidor API'),
+            content: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              keyboardType: TextInputType.url,
+              decoration: InputDecoration(
+                labelText: 'URL',
+                hintText: 'http://127.0.0.1:4000/api/v1',
+                errorText: errorText,
+              ),
+              autofocus: true,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  focusNode.unfocus();
+                  Navigator.of(dialogContext).pop();
+                },
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final value = controller.text.trim();
+                  final valid =
+                      value.startsWith('http://') ||
+                      value.startsWith('https://');
+                  if (!valid) {
+                    setDialogState(() {
+                      errorText =
+                          'Ingrese una URL valida con http:// o https://';
+                    });
+                    return;
+                  }
+                  focusNode.unfocus();
+                  await onChanged(value);
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop();
+                  }
+                },
+                child: const Text('Guardar'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+  focusNode.dispose();
+  controller.dispose();
 }
 
 class CardBox extends StatelessWidget {
@@ -700,8 +1104,22 @@ class PageHeading extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(kicker, style: const TextStyle(color: _blue, fontSize: 12, fontWeight: FontWeight.w900)),
-        Text(title, style: const TextStyle(color: _blue, fontSize: 25, fontWeight: FontWeight.w900)),
+        Text(
+          kicker,
+          style: const TextStyle(
+            color: _blue,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        Text(
+          title,
+          style: const TextStyle(
+            color: _blue,
+            fontSize: 25,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
       ],
     );
   }
@@ -727,7 +1145,12 @@ class InfoChip extends StatelessWidget {
         children: [
           Icon(icon, size: 15, color: _primary),
           const SizedBox(width: 6),
-          Expanded(child: Text(label, style: const TextStyle(color: _blue, fontWeight: FontWeight.w800))),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: _blue, fontWeight: FontWeight.w800),
+            ),
+          ),
         ],
       ),
     );

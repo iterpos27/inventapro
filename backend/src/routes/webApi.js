@@ -139,8 +139,11 @@ webApi.get('/dashboard', requireWebUser, asyncHandler(async (req, res) => {
     pool.query("SELECT COUNT(*)::int AS total FROM conteos WHERE estado = 'borrador'"),
     pool.query('SELECT COUNT(*)::int AS total FROM usuarios WHERE estado = TRUE'),
     pool.query(
-      `SELECT t.numero_toma, t.nombre_toma, t.estado, t.fecha_creacion, t.fecha_finalizacion,
-              COALESCE(r.usuarios_asignados, 0) AS usuarios_asignados
+      `SELECT t.id, t.numero_toma, t.nombre_toma, t.agencia, t.estado,
+              t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin,
+              t.fecha_creacion, t.fecha_finalizacion,
+              COALESCE(r.usuarios_asignados, 0) AS usuarios_asignados,
+              COALESCE(r.usuarios_finalizados, 0) AS usuarios_finalizados
        FROM tomas_fisicas t
        LEFT JOIN toma_resumen r ON r.toma_id = t.id
        ORDER BY t.id DESC
