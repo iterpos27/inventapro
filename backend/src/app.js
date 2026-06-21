@@ -48,9 +48,14 @@ if (config.enableMobileApi) {
 app.use('/api/admin', webApi);
 
 if (existsSync(frontendDist)) {
-  app.use(express.static(frontendDist, { maxAge: config.nodeEnv === 'production' ? '1d' : 0 }));
+  app.use(express.static(frontendDist, {
+    index: false,
+    maxAge: config.nodeEnv === 'production' ? '1y' : 0,
+    immutable: config.nodeEnv === 'production'
+  }));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) return next();
+    res.setHeader('Cache-Control', 'no-cache');
     return res.sendFile(path.join(frontendDist, 'index.html'));
   });
 }
