@@ -97,6 +97,7 @@ export function MiConteo({ request }) {
   const searchRequestRef = useRef(0);
   const searchTimerRef = useRef(null);
   const autoSaveTimerRef = useRef(null);
+  const autoSaveActionRef = useRef(() => {});
   const searchInputRef = useRef(null);
   const quantityRefs = useRef(new Map());
   const lastSavedSnapshotRef = useRef('[]');
@@ -114,7 +115,7 @@ export function MiConteo({ request }) {
 
   useEffect(() => () => {
     window.clearTimeout(searchTimerRef.current);
-    window.clearTimeout(autoSaveTimerRef.current);
+    window.clearInterval(autoSaveTimerRef.current);
     searchAbortRef.current?.abort();
   }, []);
 
@@ -133,7 +134,6 @@ export function MiConteo({ request }) {
   }, [q]);
 
   useEffect(() => {
-    window.clearTimeout(autoSaveTimerRef.current);
     if (!conteo) return;
     if (itemsSnapshot === lastSavedSnapshotRef.current) {
       setSaveStatus('Sin cambios recientes.');
@@ -145,10 +145,25 @@ export function MiConteo({ request }) {
     }
 
     setSaveStatus('Cambios pendientes...');
-    autoSaveTimerRef.current = window.setTimeout(() => {
-      save(false, true);
-    }, AUTO_SAVE_DELAY);
   }, [conteo?.id, itemsSnapshot]);
+
+  useEffect(() => {
+    window.clearInterval(autoSaveTimerRef.current);
+    if (!conteo) return undefined;
+
+    const runAutoSave = () => autoSaveActionRef.current();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') runAutoSave();
+    };
+
+    autoSaveTimerRef.current = window.setInterval(runAutoSave, AUTO_SAVE_DELAY);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.clearInterval(autoSaveTimerRef.current);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [conteo?.id]);
 
   async function startToma(toma) {
     setError('');
@@ -277,10 +292,11 @@ export function MiConteo({ request }) {
       });
       setConteo((current) => current ? { ...current, version: data.conteo_version, estado: data.estado } : current);
       lastSavedSnapshotRef.current = itemsSnapshot;
-      setSaveStatus(finish ? 'Conteo finalizado.' : 'Borrador guardado automaticamente.');
+      const savedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setSaveStatus(finish ? 'Conteo finalizado.' : `Borrador guardado automaticamente a las ${savedAt}.`);
       if (!silent) setMessage(finish ? 'Conteo finalizado' : 'Borrador guardado');
       if (finish) {
-        window.clearTimeout(autoSaveTimerRef.current);
+        window.clearInterval(autoSaveTimerRef.current);
         setConteo(null);
         setItems([]);
         lastSavedSnapshotRef.current = '[]';
@@ -294,6 +310,17 @@ export function MiConteo({ request }) {
       setSaving(false);
     }
   }
+
+  autoSaveActionRef.current = () => {
+    if (
+      conteo &&
+      !savingRef.current &&
+      validItems.length > 0 &&
+      itemsSnapshot !== lastSavedSnapshotRef.current
+    ) {
+      save(false, true);
+    }
+  };
 
   if (!conteo) {
     return (

@@ -58,7 +58,7 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  final api = ApiClient();
+  late final ApiClient api;
   final store = LocalStore();
   CountSession? session;
   String apiBaseUrl = AppConfig.defaultApiBaseUrl;
@@ -67,7 +67,16 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    api = ApiClient(onUnauthorized: _handleUnauthorized);
     _restore();
+  }
+
+  Future<void> _handleUnauthorized() async {
+    await store.clearSession();
+    api.token = null;
+    if (mounted) {
+      setState(() => session = null);
+    }
   }
 
   Future<void> _restore() async {
@@ -96,9 +105,15 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _logout() async {
-    await api.logout();
-    await store.clearSession();
-    setState(() => session = null);
+    try {
+      await api.logout();
+    } finally {
+      await store.clearSession();
+      api.token = null;
+      if (mounted) {
+        setState(() => session = null);
+      }
+    }
   }
 
   @override
@@ -624,6 +639,7 @@ class _OperationHomeState extends State<OperationHome> {
       }
     } catch (err) {
       await _persistLocalDraft();
+      if (!mounted) return;
       setState(
         () => saveStatus = 'Borrador local guardado. Pendiente de sincronizar.',
       );

@@ -17,11 +17,12 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  ApiClient({http.Client? httpClient, String? apiBaseUrl})
+  ApiClient({http.Client? httpClient, String? apiBaseUrl, this.onUnauthorized})
     : _http = httpClient ?? http.Client(),
       apiBaseUrl = apiBaseUrl ?? AppConfig.defaultApiBaseUrl;
 
   final http.Client _http;
+  final Future<void> Function()? onUnauthorized;
   String apiBaseUrl;
   String? token;
 
@@ -70,6 +71,10 @@ class ApiClient {
       final message = decoded is Map<String, dynamic>
           ? '${decoded['message'] ?? decoded['error'] ?? 'Error del servidor'}'
           : 'Error del servidor';
+      if (response.statusCode == 401 && token != null && token!.isNotEmpty) {
+        token = null;
+        await onUnauthorized?.call();
+      }
       throw ApiException(message, response.statusCode);
     }
     if (decoded is! Map<String, dynamic>) {
