@@ -1,7 +1,7 @@
 class AppConfig {
   static const defaultApiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:4000/api/v1',
+    defaultValue: 'https://inventapro.up.railway.app/api/v1',
   );
 
   static String normalizeApiBaseUrl(String value) {

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'api_client.dart';
@@ -80,8 +81,12 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _restore() async {
-    final savedApiBaseUrl = await store.readApiBaseUrl();
-    api.setApiBaseUrl(savedApiBaseUrl ?? AppConfig.defaultApiBaseUrl);
+    final savedApiBaseUrl = kDebugMode ? await store.readApiBaseUrl() : null;
+    final configuredApiBaseUrl = savedApiBaseUrl ?? AppConfig.defaultApiBaseUrl;
+    api.setApiBaseUrl(configuredApiBaseUrl);
+    if (!kDebugMode) {
+      await store.saveApiBaseUrl(api.apiBaseUrl);
+    }
     final saved = await store.readSession();
     api.token = saved?.token;
     setState(() {
@@ -276,16 +281,18 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: TextStyle(color: Colors.black54),
                     ),
                     const SizedBox(height: 18),
-                    TextField(
-                      controller: apiCtrl,
-                      keyboardType: TextInputType.url,
-                      style: const TextStyle(fontSize: 13),
-                      decoration: const InputDecoration(
-                        labelText: 'URL del servidor',
-                        prefixIcon: Icon(Icons.link, color: _primary),
+                    if (kDebugMode) ...[
+                      TextField(
+                        controller: apiCtrl,
+                        keyboardType: TextInputType.url,
+                        style: const TextStyle(fontSize: 13),
+                        decoration: const InputDecoration(
+                          labelText: 'URL del servidor',
+                          prefixIcon: Icon(Icons.link, color: _primary),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
+                    ],
                     TextField(
                       controller: userCtrl,
                       style: const TextStyle(fontSize: 13),
@@ -768,10 +775,11 @@ class _OperationHomeState extends State<OperationHome> {
           ],
         ),
         actions: [
-          ApiSettingsIconButton(
-            apiBaseUrl: widget.apiBaseUrl,
-            onChanged: widget.onApiBaseUrlChanged,
-          ),
+          if (kDebugMode)
+            ApiSettingsIconButton(
+              apiBaseUrl: widget.apiBaseUrl,
+              onChanged: widget.onApiBaseUrlChanged,
+            ),
           IconButton(
             tooltip: 'Salir',
             onPressed: widget.onLogout,

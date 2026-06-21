@@ -2,8 +2,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mobile/api_client.dart';
+import 'package:mobile/config.dart';
 
 void main() {
+  test('la API de produccion apunta al dominio fijo de Railway', () {
+    expect(
+      AppConfig.defaultApiBaseUrl,
+      'https://inventapro.up.railway.app/api/v1',
+    );
+  });
+
   test('dominios publicos usan https y las IP locales conservan http', () {
     final publicClient = ApiClient(
       apiBaseUrl: 'http://inventapro.up.railway.app/api/v1/',
