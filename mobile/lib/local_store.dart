@@ -21,7 +21,7 @@ class LocalStore {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(_tokenKey);
     final user = prefs.getString(_userKey);
-    if (token == null || user == null) return null;
+    if (token == null || token.trim().isEmpty || user == null) return null;
     return CountSession(
       token: token,
       user: SessionUser.fromJson(Map<String, dynamic>.from(jsonDecode(user))),

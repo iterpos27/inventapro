@@ -93,9 +93,15 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _saveApiBaseUrl(String value) async {
     final clean = value.trim();
+    final serverChanged = clean != api.apiBaseUrl;
     await store.saveApiBaseUrl(clean);
     api.setApiBaseUrl(clean);
-    setState(() => apiBaseUrl = clean);
+    if (serverChanged && session != null) {
+      await _handleUnauthorized();
+    }
+    if (mounted) {
+      setState(() => apiBaseUrl = clean);
+    }
   }
 
   Future<void> _setSession(CountSession next) async {
@@ -403,6 +409,7 @@ class _OperationHomeState extends State<OperationHome> {
       final data = await widget.api.tomas();
       setState(() => tomas = data);
     } catch (err) {
+      if (err is ApiException && err.statusCode == 401) return;
       _toast('$err', isError: true);
     } finally {
       if (mounted) {

@@ -32,4 +32,32 @@ void main() {
     expect(client.token, isNull);
     expect(unauthorizedCalled, isTrue);
   });
+
+  test('token ausente tambien obliga a volver al login', () async {
+    var unauthorizedCalled = false;
+    final client = ApiClient(
+      apiBaseUrl: 'https://inventapro.example/api/v1',
+      httpClient: MockClient(
+        (_) async => http.Response(
+          '{"ok":false,"message":"Token requerido"}',
+          401,
+          headers: {'content-type': 'application/json'},
+        ),
+      ),
+      onUnauthorized: () async {
+        unauthorizedCalled = true;
+      },
+    );
+
+    await expectLater(
+      client.tomas(),
+      throwsA(
+        isA<ApiException>()
+            .having((error) => error.statusCode, 'statusCode', 401)
+            .having((error) => error.message, 'message', 'Token requerido'),
+      ),
+    );
+
+    expect(unauthorizedCalled, isTrue);
+  });
 }

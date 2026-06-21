@@ -71,7 +71,7 @@ class ApiClient {
       final message = decoded is Map<String, dynamic>
           ? '${decoded['message'] ?? decoded['error'] ?? 'Error del servidor'}'
           : 'Error del servidor';
-      if (response.statusCode == 401 && token != null && token!.isNotEmpty) {
+      if (response.statusCode == 401) {
         token = null;
         await onUnauthorized?.call();
       }
