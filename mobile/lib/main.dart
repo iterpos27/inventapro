@@ -92,7 +92,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _saveApiBaseUrl(String value) async {
-    final clean = value.trim();
+    final clean = AppConfig.normalizeApiBaseUrl(value);
     final serverChanged = clean != api.apiBaseUrl;
     await store.saveApiBaseUrl(clean);
     api.setApiBaseUrl(clean);

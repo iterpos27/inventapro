@@ -4,6 +4,16 @@ import 'package:http/testing.dart';
 import 'package:mobile/api_client.dart';
 
 void main() {
+  test('dominios publicos usan https y las IP locales conservan http', () {
+    final publicClient = ApiClient(
+      apiBaseUrl: 'http://inventapro.up.railway.app/api/v1/',
+    );
+    final localClient = ApiClient(apiBaseUrl: 'http://192.168.2.5:4000/api/v1');
+
+    expect(publicClient.apiBaseUrl, 'https://inventapro.up.railway.app/api/v1');
+    expect(localClient.apiBaseUrl, 'http://192.168.2.5:4000/api/v1');
+  });
+
   test('token invalido limpia la sesion y notifica al shell', () async {
     var unauthorizedCalled = false;
     final client = ApiClient(
@@ -60,4 +70,39 @@ void main() {
 
     expect(unauthorizedCalled, isTrue);
   });
+
+  test(
+    'credenciales rechazadas muestran el error sin reiniciar el login',
+    () async {
+      var unauthorizedCalled = false;
+      final client = ApiClient(
+        apiBaseUrl: 'https://inventapro.example/api/v1',
+        httpClient: MockClient(
+          (_) async => http.Response(
+            '{"ok":false,"message":"Usuario o contrasena incorrectos"}',
+            401,
+            headers: {'content-type': 'application/json'},
+          ),
+        ),
+        onUnauthorized: () async {
+          unauthorizedCalled = true;
+        },
+      );
+
+      await expectLater(
+        client.login('usuario', 'clave'),
+        throwsA(
+          isA<ApiException>()
+              .having((error) => error.statusCode, 'statusCode', 401)
+              .having(
+                (error) => error.message,
+                'message',
+                'Usuario o contrasena incorrectos',
+              ),
+        ),
+      );
+
+      expect(unauthorizedCalled, isFalse);
+    },
+  );
 }

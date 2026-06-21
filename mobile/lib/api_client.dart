@@ -19,7 +19,9 @@ class ApiException implements Exception {
 class ApiClient {
   ApiClient({http.Client? httpClient, String? apiBaseUrl, this.onUnauthorized})
     : _http = httpClient ?? http.Client(),
-      apiBaseUrl = apiBaseUrl ?? AppConfig.defaultApiBaseUrl;
+      apiBaseUrl = AppConfig.normalizeApiBaseUrl(
+        apiBaseUrl ?? AppConfig.defaultApiBaseUrl,
+      );
 
   final http.Client _http;
   final Future<void> Function()? onUnauthorized;
@@ -27,7 +29,7 @@ class ApiClient {
   String? token;
 
   void setApiBaseUrl(String value) {
-    apiBaseUrl = value.trim();
+    apiBaseUrl = AppConfig.normalizeApiBaseUrl(value);
   }
 
   Uri _uri(String path, [Map<String, String>? query]) {
@@ -57,7 +59,10 @@ class ApiClient {
     }
   }
 
-  Future<Map<String, dynamic>> _decode(http.Response response) async {
+  Future<Map<String, dynamic>> _decode(
+    http.Response response, {
+    bool handleUnauthorized = true,
+  }) async {
     final dynamic decoded;
     try {
       decoded = jsonDecode(response.body.isEmpty ? '{}' : response.body);
@@ -71,7 +76,7 @@ class ApiClient {
       final message = decoded is Map<String, dynamic>
           ? '${decoded['message'] ?? decoded['error'] ?? 'Error del servidor'}'
           : 'Error del servidor';
-      if (response.statusCode == 401) {
+      if (response.statusCode == 401 && handleUnauthorized) {
         token = null;
         await onUnauthorized?.call();
       }
@@ -95,7 +100,7 @@ class ApiClient {
         }),
       ),
     );
-    final data = await _decode(response);
+    final data = await _decode(response, handleUnauthorized: false);
     token = '${data['token'] ?? ''}';
     return CountSession(
       token: token!,
