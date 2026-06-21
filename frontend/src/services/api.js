@@ -1,4 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api/admin';
+const API_URL = import.meta.env.VITE_API_URL
+  || (import.meta.env.PROD ? '/api/admin' : 'http://localhost:4000/api/admin');
 
 export function api(token) {
   return async (path, options = {}) => {

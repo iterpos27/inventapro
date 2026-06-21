@@ -10,7 +10,7 @@ Migracion de `centro_ruliman_inventario` desde PHP/MySQL a PERN:
 
 ## Requisitos
 
-- Node.js 20 o superior.
+- Node.js 22.
 - PostgreSQL 14 o superior.
 
 ## Instalacion local
@@ -129,3 +129,33 @@ Para migrar datos reales desde el PHP actual, exporta las tablas MySQL y cargala
 - `login_attempts`
 
 Los hashes de password PHP generados por `password_hash` se validan con `bcrypt`, por lo que se pueden conservar.
+
+## Despliegue en Railway
+
+El repositorio esta preparado para desplegarse como un unico servicio: Express sirve la API y tambien el frontend compilado. El arranque ejecuta las migraciones pendientes y crea el administrador inicial solo si todavia no existe.
+
+1. Sube el repositorio a GitHub y crea un proyecto en Railway desde ese repositorio.
+2. Agrega un servicio PostgreSQL al mismo proyecto.
+3. En el servicio de InventaPro configura estas variables:
+
+```env
+NODE_ENV=production
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+JWT_SECRET=un_secreto_aleatorio_de_al_menos_32_caracteres
+JWT_EXPIRES_IN=8h
+TRUST_PROXY=true
+ENABLE_MOBILE_API=true
+JSON_LIMIT=2mb
+APP_SEED_ADMIN_USER=admin
+APP_SEED_ADMIN_PASSWORD=una_clave_segura_de_al_menos_12_caracteres
+```
+
+Railway proporciona `PORT` y `RAILWAY_PUBLIC_DOMAIN`; no hace falta definirlos. `railway.json` contiene el build, el comando de inicio, el health check `/health` y la politica de reinicio.
+
+Despues del primer despliegue, genera un dominio publico en **Settings > Networking**. El panel queda en la raiz del dominio y la app movil debe compilarse apuntando a:
+
+```powershell
+flutter build apk --release --dart-define=API_BASE_URL=https://TU-DOMINIO.up.railway.app/api/v1
+```
+
+Los archivos Excel de `backend/storage` son temporales. Railway puede eliminarlos al reiniciar el contenedor; los datos de inventario permanecen en PostgreSQL.
