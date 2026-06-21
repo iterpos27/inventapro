@@ -2,7 +2,8 @@ import pg from 'pg';
 import { config } from '../config.js';
 
 export const pool = new pg.Pool({
-  connectionString: config.databaseUrl
+  connectionString: config.databaseUrl,
+  options: `-c timezone=${config.appTimezone}`
 });
 
 export async function withTransaction(callback) {
@@ -19,4 +20,3 @@ export async function withTransaction(callback) {
     client.release();
   }
 }
-

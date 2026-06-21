@@ -14,7 +14,7 @@ import {
 } from '../utils/helpers';
 import { TomaForm, defaultTomaForm } from './Tomas';
 
-export function Conteos({ request, token }) {
+export function Conteos({ request, token, user }) {
   const [items, setItems] = useState([]);
   const [users, setUsers] = useState([]);
   const [agencias, setAgencias] = useState([]);
@@ -27,12 +27,15 @@ export function Conteos({ request, token }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const isAdmin = user?.rol === 'admin';
 
   useEffect(() => {
     request('/conteos').then((data) => setItems(data.conteos));
-    request('/usuarios').then((data) => setUsers(data.usuarios.filter((user) => ['usuario', 'operador'].includes(user.rol) && user.estado))).catch(() => {});
-    request('/agencias').then((data) => setAgencias((data.agencias || []).filter((a) => a.estado))).catch(() => {});
-  }, [request]);
+    if (isAdmin) {
+      request('/usuarios').then((data) => setUsers(data.usuarios.filter((item) => ['usuario', 'operador'].includes(item.rol) && item.estado))).catch(() => {});
+      request('/agencias').then((data) => setAgencias((data.agencias || []).filter((a) => a.estado))).catch(() => {});
+    }
+  }, [isAdmin, request]);
 
   const filtered = useMemo(() => items.filter((item) => isWithinRange(item.fecha_inicio || item.fecha_finalizacion, from, to)), [items, from, to]);
   const dailyRows = useMemo(() => buildDailyReport(filtered), [filtered]);
@@ -171,26 +174,26 @@ export function Conteos({ request, token }) {
               <ChevronLeft size={14} />
               Volver
             </button>
-            <button className="edit-text-btn" type="button" onClick={() => setModalOpen(true)}>
+            {isAdmin ? <button className="edit-text-btn" type="button" onClick={() => setModalOpen(true)}>
               <Edit3 size={14} />
               Editar
-            </button>
-            <button className="outline-action compact" type="button" onClick={reuseToma}>
+            </button> : null}
+            {isAdmin ? <button className="outline-action compact" type="button" onClick={reuseToma}>
               <RefreshCcw size={14} />
               Reutilizar
-            </button>
-            <button className={selected.estado === 'abierta' ? 'delete-text-btn' : 'toggle-text-btn'} type="button" onClick={() => changeStatus(selected.estado === 'abierta' ? 'cerrar' : 'reabrir')}>
+            </button> : null}
+            {isAdmin ? <button className={selected.estado === 'abierta' ? 'delete-text-btn' : 'toggle-text-btn'} type="button" onClick={() => changeStatus(selected.estado === 'abierta' ? 'cerrar' : 'reabrir')}>
               <Power size={14} />
               {selected.estado === 'abierta' ? 'Cerrar toma' : 'Reabrir toma'}
-            </button>
+            </button> : null}
             <button className="edit-text-btn success" type="button" onClick={() => consolidado(selected)} disabled={Number(resumen?.finalizados || 0) === 0}>
               <Download size={14} />
               Consolidado
             </button>
-            <button className="delete-text-btn" type="button" onClick={deleteToma} disabled={!canDelete} title={canDelete ? 'Eliminar toma' : 'No se puede eliminar una toma con conteos'}>
+            {isAdmin ? <button className="delete-text-btn" type="button" onClick={deleteToma} disabled={!canDelete} title={canDelete ? 'Eliminar toma' : 'No se puede eliminar una toma con conteos'}>
               <Trash2 size={14} />
               Eliminar
-            </button>
+            </button> : null}
           </div>
         </div>
         <FeedbackToast message={message} error={error} onClose={() => { setMessage(''); setError(''); }} />
@@ -220,7 +223,7 @@ export function Conteos({ request, token }) {
           </section>
         ) : null}
 
-        {selected.estado !== 'abierta' ? (
+        {isAdmin && selected.estado !== 'abierta' ? (
           <div className="inline-alert">Para agregar usuarios nuevos, primero reabra la toma.</div>
         ) : null}
 
@@ -269,10 +272,10 @@ export function Conteos({ request, token }) {
                               <FileDown size={14} />
                               Descargar
                             </button>
-                            <button className="toggle-text-btn" type="button" onClick={() => enableUser(participant.usuario_id)}>
+                            {isAdmin ? <button className="toggle-text-btn" type="button" onClick={() => enableUser(participant.usuario_id)}>
                               <RefreshCcw size={14} />
                               Habilitar
-                            </button>
+                            </button> : null}
                           </>
                         ) : (
                           <span className="muted">Pendiente</span>
@@ -291,7 +294,7 @@ export function Conteos({ request, token }) {
           </div>
         </section>
 
-        {modalOpen ? (
+        {isAdmin && modalOpen ? (
           <Modal title="Editar toma" onClose={() => setModalOpen(false)}>
             <TomaForm form={form} setForm={setForm} users={users} agencias={agencias} onSubmit={updateToma} submitLabel="Guardar cambios" />
           </Modal>

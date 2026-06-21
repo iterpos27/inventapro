@@ -129,7 +129,7 @@ webApi.get('/auth/me', requireWebUser, asyncHandler(async (req, res) => {
   res.json({ ok: true, user: publicUser(req.user) });
 }));
 
-webApi.get('/dashboard', requireWebUser, asyncHandler(async (req, res) => {
+webApi.get('/dashboard', requireWebUser, requirePermission('reports'), asyncHandler(async (req, res) => {
   const [products, tomas, active, tomasFinalizadas, finalized, drafts, users, latestTomas] = await Promise.all([
     pool.query('SELECT COUNT(*)::int AS total FROM productos WHERE estado = TRUE'),
     pool.query('SELECT COUNT(*)::int AS total FROM tomas_fisicas'),
@@ -289,7 +289,7 @@ webApi.post('/mi/conteos/:id/finalizar', requireWebUser, requirePermission('coun
   res.json(result);
 }));
 
-webApi.get('/productos', requireWebUser, asyncHandler(async (req, res) => {
+webApi.get('/productos', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
   const q = String(req.query.q || '').trim();
   const page = Math.max(1, Number(req.query.page || 1));
   const perPage = Math.max(1, Math.min(Number(req.query.perPage || 30), 30));
@@ -351,7 +351,7 @@ webApi.delete('/productos/:id', requireWebUser, requirePermission('admin'), asyn
   res.json({ ok: true, id: Number(rows[0].id), message: 'Producto eliminado correctamente' });
 }));
 
-webApi.get('/agencias', requireWebUser, asyncHandler(async (req, res) => {
+webApi.get('/agencias', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM agencias ORDER BY nombre');
   res.json({ ok: true, agencias: rows });
 }));
@@ -454,7 +454,7 @@ webApi.delete('/usuarios/:id', requireWebUser, requirePermission('admin'), async
   res.json({ ok: true, id: Number(rows[0].id), message: 'Usuario desactivado correctamente' });
 }));
 
-webApi.get('/tomas', requireWebUser, asyncHandler(async (req, res) => {
+webApi.get('/tomas', requireWebUser, requirePermission('reports'), asyncHandler(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT t.*,
      COALESCE(r.usuarios_asignados, 0) AS usuarios_asignados,
@@ -514,7 +514,7 @@ webApi.post('/tomas', requireWebUser, requirePermission('admin'), asyncHandler(a
   res.status(201).json({ ok: true, toma: result, message: 'Toma fisica creada para usuarios activos' });
 }));
 
-webApi.get('/tomas/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+webApi.get('/tomas/:id', requireWebUser, requirePermission('reports'), asyncHandler(async (req, res) => {
   const tomaId = Number(req.params.id || 0);
   const toma = await pool.query(
     `SELECT t.*, u.nombre AS creado_por_nombre,
@@ -721,7 +721,7 @@ webApi.post('/tomas/:id/usuarios/:usuarioId/habilitar', requireWebUser, requireP
   res.json({ ok: true, message: 'Conteo habilitado para edicion' });
 }));
 
-webApi.get('/conteos', requireWebUser, asyncHandler(async (req, res) => {
+webApi.get('/conteos', requireWebUser, requirePermission('reports'), asyncHandler(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT c.*, u.nombre AS usuario_nombre, t.numero_toma, t.nombre_toma
      FROM conteos c
@@ -742,7 +742,7 @@ webApi.get('/conteos/:id/excel', requireWebUser, asyncHandler(async (req, res) =
   res.download(file.fullPath, file.filename);
 }));
 
-webApi.post('/tomas/:id/consolidado', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+webApi.post('/tomas/:id/consolidado', requireWebUser, requirePermission('reports'), asyncHandler(async (req, res) => {
   const tomaId = Number(req.params.id || 0);
   if (tomaId <= 0) {
     throw new AppError('Toma invalida', 422);
@@ -751,7 +751,7 @@ webApi.post('/tomas/:id/consolidado', requireWebUser, requirePermission('admin')
   res.json({ ok: true, archivo: file.filename, download_url: `/api/admin/tomas/${tomaId}/consolidado` });
 }));
 
-webApi.get('/tomas/:id/consolidado', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+webApi.get('/tomas/:id/consolidado', requireWebUser, requirePermission('reports'), asyncHandler(async (req, res) => {
   const tomaId = Number(req.params.id || 0);
   if (tomaId <= 0) {
     throw new AppError('Toma invalida', 422);

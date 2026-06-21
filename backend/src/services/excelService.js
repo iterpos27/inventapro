@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import ExcelJS from 'exceljs';
 import { pool, withTransaction } from '../db/pool.js';
 import { AppError } from '../utils/errors.js';
+import { roleCan } from '../utils/roles.js';
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const storageRoot = path.resolve(dirname, '../../storage');
@@ -24,7 +25,7 @@ export function importStorageDir() {
 export async function exportConteoExcel(conteoId, user) {
   const params = [conteoId];
   let authSql = '';
-  if (user.rol !== 'admin') {
+  if (!roleCan(user.rol, 'reports')) {
     params.push(user.id);
     authSql = ` AND c.usuario_id = $${params.length}`;
   }

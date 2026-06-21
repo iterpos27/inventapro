@@ -102,6 +102,12 @@ Para produccion se recomienda exponer el backend por HTTPS y compilar con esa UR
 flutter build apk --release --dart-define=API_BASE_URL=https://tu-dominio.com/api/v1
 ```
 
+La compilacion `release` ya no usa la clave de depuracion. Antes de generarla:
+
+1. Crea y respalda `mobile/android/inventapro-release.jks` con `keytool`.
+2. Copia `mobile/android/key.properties.example` como `mobile/android/key.properties` y completa sus credenciales.
+3. Conserva ambos archivos fuera de Git; sin esa clave no se pueden publicar actualizaciones sobre la misma instalacion.
+
 ## Flujos Excel portados
 
 El backend incluye endpoints protegidos con JWT para reemplazar los flujos PHP de PhpSpreadsheet:
@@ -146,6 +152,8 @@ JWT_EXPIRES_IN=8h
 TRUST_PROXY=true
 ENABLE_MOBILE_API=true
 JSON_LIMIT=2mb
+APP_TIMEZONE=America/Guayaquil
+TOMA_CLOSE_INTERVAL_MS=60000
 APP_SEED_ADMIN_USER=admin
 APP_SEED_ADMIN_PASSWORD=una_clave_segura_de_al_menos_12_caracteres
 ```

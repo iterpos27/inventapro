@@ -18,8 +18,13 @@ export const nav = [
 
 export function navForUser(user) {
   if (!user) return nav;
-  if (user.rol === 'usuario' || user.rol === 'operador') {
-    return nav.filter((item) => item.id === 'conteo_borradores');
-  }
-  return nav;
+  const routesByRole = {
+    admin: nav.map((item) => item.id),
+    supervisor: ['dashboard', 'conteos'],
+    reportes: ['dashboard', 'conteos'],
+    usuario: ['conteo_borradores'],
+    operador: ['conteo_borradores']
+  };
+  const allowed = routesByRole[user.rol] || [];
+  return nav.filter((item) => allowed.includes(item.id));
 }

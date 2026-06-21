@@ -1,10 +1,12 @@
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'models.dart';
 
 class LocalStore {
+  static const _secure = FlutterSecureStorage();
   static const _tokenKey = 'session_token';
   static const _userKey = 'session_user';
   static const _apiBaseUrlKey = 'api_base_url';
@@ -13,15 +15,36 @@ class LocalStore {
 
   Future<void> saveSession(CountSession session) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, session.token);
+    try {
+      await _secure.write(key: _tokenKey, value: session.token);
+      await prefs.remove(_tokenKey);
+    } catch (_) {
+      await prefs.setString(_tokenKey, session.token);
+    }
     await prefs.setString(_userKey, jsonEncode(session.user.toJson()));
   }
 
   Future<CountSession?> readSession() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString(_tokenKey);
     final user = prefs.getString(_userKey);
-    if (token == null || token.trim().isEmpty || user == null) return null;
+    if (user == null) return null;
+    String? token;
+    try {
+      token = await _secure.read(key: _tokenKey);
+    } catch (_) {
+      token = null;
+    }
+    final legacyToken = prefs.getString(_tokenKey);
+    if ((token == null || token.trim().isEmpty) && legacyToken != null && legacyToken.trim().isNotEmpty) {
+      token = legacyToken;
+      try {
+        await _secure.write(key: _tokenKey, value: legacyToken);
+        await prefs.remove(_tokenKey);
+      } catch (_) {
+        // El almacenamiento seguro no existe en algunos entornos de prueba.
+      }
+    }
+    if (token == null || token.trim().isEmpty) return null;
     return CountSession(
       token: token,
       user: SessionUser.fromJson(Map<String, dynamic>.from(jsonDecode(user))),
@@ -30,6 +53,11 @@ class LocalStore {
 
   Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
+    try {
+      await _secure.delete(key: _tokenKey);
+    } catch (_) {
+      // Mantener el cierre de sesion operativo si el plugin no esta disponible.
+    }
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
   }

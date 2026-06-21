@@ -2,6 +2,10 @@ import 'dotenv/config';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const jwtSecret = process.env.JWT_SECRET || (isProduction ? '' : 'dev_secret_change_me');
+const appTimezone = process.env.APP_TIMEZONE || 'America/Guayaquil';
+const configuredCloseInterval = Number(process.env.TOMA_CLOSE_INTERVAL_MS || 60_000);
+
+process.env.TZ = appTimezone;
 
 if (isProduction && jwtSecret.length < 32) {
   throw new Error('JWT_SECRET debe estar definido y tener al menos 32 caracteres en produccion');
@@ -18,6 +22,8 @@ export const config = {
   trustProxy: process.env.TRUST_PROXY === 'true',
   enableMobileApi: process.env.ENABLE_MOBILE_API === 'true',
   jsonLimit: process.env.JSON_LIMIT || '2mb',
+  appTimezone,
+  tomaCloseIntervalMs: Number.isFinite(configuredCloseInterval) ? Math.max(60_000, configuredCloseInterval) : 60_000,
   seedAdminUser: process.env.APP_SEED_ADMIN_USER || '',
   seedAdminPassword: process.env.APP_SEED_ADMIN_PASSWORD || ''
 };

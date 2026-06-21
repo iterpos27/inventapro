@@ -24,10 +24,11 @@ export default function App() {
 
   const request = useMemo(() => api(token), [token]);
   const navItems = useMemo(() => navForUser(user), [user]);
+  const defaultRoute = navItems[0]?.id || 'conteo_borradores';
 
   useEffect(() => {
     if (user && !navForUser(user).some((item) => item.id === route)) {
-      setRoute(user.rol === 'usuario' || user.rol === 'operador' ? 'conteo_borradores' : 'dashboard');
+      setRoute(navForUser(user)[0]?.id || 'conteo_borradores');
     }
   }, [route, user]);
 
@@ -36,7 +37,7 @@ export default function App() {
     localStorage.setItem('inventapro_user', JSON.stringify(session.user));
     setToken(session.token);
     setUser(session.user);
-    setRoute(session.user.rol === 'usuario' || session.user.rol === 'operador' ? 'conteo_borradores' : 'dashboard');
+    setRoute(navForUser(session.user)[0]?.id || 'conteo_borradores');
   }
 
   async function logout() {
@@ -63,7 +64,7 @@ export default function App() {
     conteos: Conteos,
     agencias: Agencias,
     usuarios: Usuarios
-  }[route];
+  }[route] || ({ conteo_borradores: MiConteo, dashboard: Dashboard }[defaultRoute]);
 
   return (
     <div className="shell">
