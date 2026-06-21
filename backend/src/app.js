@@ -1,5 +1,8 @@
 import cors from 'cors';
 import express from 'express';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { config } from './config.js';
@@ -9,6 +12,8 @@ import { webApi } from './routes/webApi.js';
 import { errorHandler, notFound } from './utils/errors.js';
 
 export const app = express();
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+const frontendDist = path.resolve(dirname, '../../frontend/dist');
 
 if (config.trustProxy) {
   app.set('trust proxy', 1);
@@ -41,6 +46,14 @@ if (config.enableMobileApi) {
 }
 
 app.use('/api/admin', webApi);
+
+if (existsSync(frontendDist)) {
+  app.use(express.static(frontendDist, { maxAge: config.nodeEnv === 'production' ? '1d' : 0 }));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    return res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+}
 
 app.use(notFound);
 app.use(errorHandler);

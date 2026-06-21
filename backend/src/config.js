@@ -13,7 +13,8 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/inventapro',
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '8h',
-  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  frontendUrl: process.env.FRONTEND_URL
+    || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : 'http://localhost:5173'),
   trustProxy: process.env.TRUST_PROXY === 'true',
   enableMobileApi: process.env.ENABLE_MOBILE_API === 'true',
   jsonLimit: process.env.JSON_LIMIT || '2mb',
