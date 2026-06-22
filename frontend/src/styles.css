@@ -252,7 +252,7 @@ h1 {
   position: absolute;
   right: 0;
   top: calc(100% + 10px);
-  width: 180px;
+  width: 240px;
   background: #ffffff;
   border: 1px solid #c9ddf2;
   border-radius: 6px;
@@ -268,9 +268,14 @@ h1 {
   gap: 10px;
   border: 0;
   background: transparent;
-  color: #ef4444;
+  color: #1c4f82;
   font-weight: 900;
   text-align: left;
+}
+
+.account-popover button:first-child,
+.account-popover button:last-child {
+  color: #ef4444;
 }
 
 .icon-btn {
@@ -1071,7 +1076,7 @@ h1 {
 
 .report-filter {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 328px);
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) minmax(150px, 240px);
   gap: 16px;
   align-items: end;
   margin-bottom: 16px;

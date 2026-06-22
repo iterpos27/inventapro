@@ -1,7 +1,7 @@
 const API_URL = import.meta.env.VITE_API_URL
   || (import.meta.env.PROD ? '/api/admin' : 'http://localhost:4000/api/admin');
 
-export function api(token) {
+export function api(token, onUnauthorized) {
   return async (path, options = {}) => {
     const isFormData = options.body instanceof FormData;
     const response = await fetch(`${API_URL}${path}`, {
@@ -14,7 +14,12 @@ export function api(token) {
     });
     const data = await response.json().catch(() => ({ ok: false, message: 'Respuesta invalida del servidor' }));
     if (!response.ok || data.ok === false) {
-      throw new Error(data.message || 'Error de servidor');
+      if (response.status === 401 && token) {
+        await onUnauthorized?.();
+      }
+      const error = new Error(data.message || 'Error de servidor');
+      error.status = response.status;
+      throw error;
     }
     return data;
   };

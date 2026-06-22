@@ -85,7 +85,7 @@ webApi.post('/auth/login', asyncHandler(async (req, res) => {
   }
 
   const { rows } = await pool.query(
-    'SELECT id, nombre, usuario, password, rol FROM usuarios WHERE usuario = $1 AND estado = TRUE LIMIT 1',
+    'SELECT id, nombre, usuario, password, rol, auth_version FROM usuarios WHERE usuario = $1 AND estado = TRUE LIMIT 1',
     [usuario]
   );
   const user = rows[0];
@@ -103,7 +103,7 @@ webApi.post('/auth/login', asyncHandler(async (req, res) => {
     throw new AppError('Usuario o contrasena incorrectos', 401);
   }
   const jti = crypto.randomUUID();
-  const token = jwt.sign({ sub: user.id, rol: user.rol, jti }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+  const token = jwt.sign({ sub: user.id, rol: user.rol, jti, ver: Number(user.auth_version || 0) }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
   await pool.query('DELETE FROM login_attempts WHERE usuario = $1 AND ip = $2', [usuario, ip]);
   res.json({ ok: true, token, user: publicUser(user) });
 }));
@@ -127,6 +127,35 @@ webApi.post('/auth/logout', requireWebUser, asyncHandler(async (req, res) => {
 
 webApi.get('/auth/me', requireWebUser, asyncHandler(async (req, res) => {
   res.json({ ok: true, user: publicUser(req.user) });
+}));
+
+webApi.post('/auth/password', requireWebUser, asyncHandler(async (req, res) => {
+  const currentPassword = String(req.body.current_password || '');
+  const newPassword = String(req.body.new_password || '');
+  if (!currentPassword || newPassword.length < 10) {
+    throw new AppError('La nueva contrasena debe tener al menos 10 caracteres', 422);
+  }
+  if (currentPassword === newPassword) {
+    throw new AppError('La nueva contrasena debe ser diferente', 422);
+  }
+  const current = await pool.query('SELECT password FROM usuarios WHERE id = $1 LIMIT 1', [req.user.id]);
+  if (!current.rows[0] || !(await bcrypt.compare(currentPassword, current.rows[0].password))) {
+    throw new AppError('La contrasena actual no es correcta', 422);
+  }
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await withTransaction(async (db) => {
+    await db.query('UPDATE usuarios SET password = $1, auth_version = auth_version + 1 WHERE id = $2', [passwordHash, req.user.id]);
+    await db.query('UPDATE api_tokens SET revocado = TRUE WHERE usuario_id = $1 AND revocado = FALSE', [req.user.id]);
+  });
+  res.json({ ok: true, message: 'Contrasena actualizada. Inicie sesion nuevamente.' });
+}));
+
+webApi.post('/auth/logout-all', requireWebUser, asyncHandler(async (req, res) => {
+  await withTransaction(async (db) => {
+    await db.query('UPDATE usuarios SET auth_version = auth_version + 1 WHERE id = $1', [req.user.id]);
+    await db.query('UPDATE api_tokens SET revocado = TRUE WHERE usuario_id = $1 AND revocado = FALSE', [req.user.id]);
+  });
+  res.json({ ok: true, message: 'Todas las sesiones fueron cerradas.' });
 }));
 
 webApi.get('/dashboard', requireWebUser, requirePermission('reports'), asyncHandler(async (req, res) => {
@@ -188,6 +217,24 @@ webApi.get('/mi/tomas', requireWebUser, requirePermission('count'), asyncHandler
     [req.user.id]
   );
   res.json({ ok: true, tomas: rows });
+}));
+
+webApi.get('/mi/historial', requireWebUser, requirePermission('count'), asyncHandler(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT c.id, c.estado, c.fecha_inicio, c.fecha_finalizacion,
+            t.numero_toma, t.nombre_toma, t.agencia,
+            COUNT(d.id)::int AS lineas,
+            COALESCE(SUM(d.cantidad), 0)::numeric AS unidades
+     FROM conteos c
+     LEFT JOIN tomas_fisicas t ON t.id = c.toma_id
+     LEFT JOIN conteo_detalle d ON d.conteo_id = c.id
+     WHERE c.usuario_id = $1
+     GROUP BY c.id, t.id
+     ORDER BY COALESCE(c.fecha_finalizacion, c.fecha_inicio) DESC
+     LIMIT 30`,
+    [req.user.id]
+  );
+  res.json({ ok: true, conteos: rows });
 }));
 
 webApi.post('/mi/tomas/:id/iniciar', requireWebUser, requirePermission('count'), asyncHandler(async (req, res) => {
@@ -430,11 +477,14 @@ webApi.patch('/usuarios/:id', requireWebUser, requirePermission('admin'), asyncH
   let sql = 'UPDATE usuarios SET nombre = $1, usuario = $2, rol = $3, estado = $4 WHERE id = $5 RETURNING id, nombre, usuario, rol, estado';
   if (password) {
     params.splice(2, 0, await bcrypt.hash(password, 12));
-    sql = 'UPDATE usuarios SET nombre = $1, usuario = $2, password = $3, rol = $4, estado = $5 WHERE id = $6 RETURNING id, nombre, usuario, rol, estado';
+    sql = 'UPDATE usuarios SET nombre = $1, usuario = $2, password = $3, rol = $4, estado = $5, auth_version = auth_version + 1 WHERE id = $6 RETURNING id, nombre, usuario, rol, estado';
   }
   const { rows } = await pool.query(sql, params);
   if (!rows[0]) {
     throw new AppError('Usuario no encontrado', 404);
+  }
+  if (password) {
+    await pool.query('UPDATE api_tokens SET revocado = TRUE WHERE usuario_id = $1 AND revocado = FALSE', [req.params.id]);
   }
   res.json({ ok: true, usuario: rows[0] });
 }));

@@ -105,6 +105,24 @@ mobileApi.get('/tomas', requireApiUser, asyncHandler(async (req, res) => {
   res.json({ ok: true, tomas: rows });
 }));
 
+mobileApi.get('/historial', requireApiUser, asyncHandler(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT c.id, c.estado, c.fecha_inicio, c.fecha_finalizacion,
+            t.numero_toma, t.nombre_toma, t.agencia,
+            COUNT(d.id)::int AS lineas,
+            COALESCE(SUM(d.cantidad), 0)::numeric AS unidades
+     FROM conteos c
+     LEFT JOIN tomas_fisicas t ON t.id = c.toma_id
+     LEFT JOIN conteo_detalle d ON d.conteo_id = c.id
+     WHERE c.usuario_id = $1
+     GROUP BY c.id, t.id
+     ORDER BY COALESCE(c.fecha_finalizacion, c.fecha_inicio) DESC
+     LIMIT 30`,
+    [req.user.id]
+  );
+  res.json({ ok: true, conteos: rows });
+}));
+
 mobileApi.post('/iniciar_conteo', requireApiUser, asyncHandler(async (req, res) => {
   const tomaId = Number(req.body.toma_id || 0);
   if (tomaId <= 0) {

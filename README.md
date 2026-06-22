@@ -160,6 +160,8 @@ APP_SEED_ADMIN_PASSWORD=una_clave_segura_de_al_menos_12_caracteres
 
 Railway proporciona `PORT` y `RAILWAY_PUBLIC_DOMAIN`; no hace falta definirlos. `railway.json` contiene el build, el comando de inicio, el health check `/health` y la politica de reinicio.
 
+`/health` valida tambien la conexion con PostgreSQL y devuelve `503` si la base no esta disponible. `/live` permite comprobar solamente que el proceso Node continua activo.
+
 Despues del primer despliegue, genera un dominio publico en **Settings > Networking**. El panel queda en la raiz del dominio y la app movil debe compilarse apuntando a:
 
 ```powershell
@@ -167,3 +169,7 @@ flutter build apk --release --dart-define=API_BASE_URL=https://TU-DOMINIO.up.rai
 ```
 
 Los archivos Excel de `backend/storage` son temporales. Railway puede eliminarlos al reiniciar el contenedor; los datos de inventario permanecen en PostgreSQL.
+
+## Respaldo automatizado
+
+El workflow de GitHub `PostgreSQL Backup` crea diariamente un respaldo cifrado con retencion de 14 dias. Requiere los secretos `DATABASE_PUBLIC_URL` y `BACKUP_ENCRYPTION_PASSWORD`. La configuracion y restauracion estan documentadas en `docs/backup-and-restore.md`.

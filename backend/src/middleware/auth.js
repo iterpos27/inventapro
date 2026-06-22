@@ -4,6 +4,7 @@ import { pool } from '../db/pool.js';
 import { AppError } from '../utils/errors.js';
 import { roleCan } from '../utils/roles.js';
 import { sha256 } from '../utils/hash.js';
+import { sessionVersionMatches } from '../utils/session.js';
 
 function bearerToken(req) {
   const header = req.headers.authorization || '';
@@ -31,11 +32,14 @@ export async function requireWebUser(req, res, next) {
     }
 
     const { rows } = await pool.query(
-      'SELECT id, nombre, usuario, rol FROM usuarios WHERE id = $1 AND estado = TRUE LIMIT 1',
+      'SELECT id, nombre, usuario, rol, auth_version FROM usuarios WHERE id = $1 AND estado = TRUE LIMIT 1',
       [payload.sub]
     );
     if (!rows[0]) {
       throw new AppError('Token invalido', 401);
+    }
+    if (!sessionVersionMatches(payload.ver, rows[0].auth_version)) {
+      throw new AppError('Sesion vencida. Inicie sesion nuevamente.', 401);
     }
     req.user = rows[0];
     req.tokenPayload = payload;

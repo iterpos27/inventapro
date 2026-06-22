@@ -1,0 +1,37 @@
+name: PostgreSQL Backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '20 7 * * *'
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Validate secrets
+        env:
+          DATABASE_PUBLIC_URL: ${{ secrets.DATABASE_PUBLIC_URL }}
+          BACKUP_ENCRYPTION_PASSWORD: ${{ secrets.BACKUP_ENCRYPTION_PASSWORD }}
+        run: test -n "$DATABASE_PUBLIC_URL" && test -n "$BACKUP_ENCRYPTION_PASSWORD"
+
+      - name: Create encrypted backup
+        env:
+          DATABASE_PUBLIC_URL: ${{ secrets.DATABASE_PUBLIC_URL }}
+          BACKUP_ENCRYPTION_PASSWORD: ${{ secrets.BACKUP_ENCRYPTION_PASSWORD }}
+        run: |
+          pg_dump --format=custom --no-owner --no-acl "$DATABASE_PUBLIC_URL" --file inventapro.dump
+          openssl enc -aes-256-cbc -salt -pbkdf2 -in inventapro.dump -out "inventapro-$(date -u +%Y%m%dT%H%M%SZ).dump.enc" -pass env:BACKUP_ENCRYPTION_PASSWORD
+          rm inventapro.dump
+
+      - name: Upload encrypted backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: inventapro-postgresql-${{ github.run_id }}
+          path: '*.dump.enc'
+          retention-days: 14
+          if-no-files-found: error

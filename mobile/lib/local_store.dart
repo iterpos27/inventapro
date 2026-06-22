@@ -35,7 +35,9 @@ class LocalStore {
       token = null;
     }
     final legacyToken = prefs.getString(_tokenKey);
-    if ((token == null || token.trim().isEmpty) && legacyToken != null && legacyToken.trim().isNotEmpty) {
+    if ((token == null || token.trim().isEmpty) &&
+        legacyToken != null &&
+        legacyToken.trim().isNotEmpty) {
       token = legacyToken;
       try {
         await _secure.write(key: _tokenKey, value: legacyToken);

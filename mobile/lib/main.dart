@@ -379,6 +379,7 @@ class OperationHome extends StatefulWidget {
 
 class _OperationHomeState extends State<OperationHome> {
   List<Toma> tomas = [];
+  List<CountHistory> history = [];
   ConteoInfo? conteo;
   List<CountItem> items = [];
   List<Product> results = [];
@@ -414,7 +415,11 @@ class _OperationHomeState extends State<OperationHome> {
     setState(() => loading = true);
     try {
       final data = await widget.api.tomas();
-      setState(() => tomas = data);
+      final historyData = await widget.api.historial();
+      setState(() {
+        tomas = data;
+        history = historyData;
+      });
     } catch (err) {
       if (err is ApiException && err.statusCode == 401) return;
       _toast('$err', isError: true);
@@ -914,6 +919,63 @@ class _OperationHomeState extends State<OperationHome> {
                           ],
                         ),
                       ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          CardBox(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Historial de conteos',
+                  style: TextStyle(
+                    color: _blue,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (history.isEmpty)
+                  const Text('Todavia no hay conteos registrados.'),
+                ...history.map(
+                  (item) => Container(
+                    margin: const EdgeInsets.only(bottom: 9),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: _border),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _title(item.numeroToma),
+                          style: const TextStyle(
+                            color: _blue,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'AGENCIA: ${item.agencia.isEmpty ? '-' : item.agencia}',
+                        ),
+                        Text(
+                          '${item.estado.toUpperCase()} - ${item.lineas} lineas - ${item.unidades.toStringAsFixed(2)} unidades',
+                        ),
+                        if (item.fecha.isNotEmpty)
+                          Text(
+                            item.fecha,
+                            style: const TextStyle(
+                              color: Colors.black54,
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),

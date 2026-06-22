@@ -129,6 +129,38 @@ class ConteoInfo {
   }
 }
 
+class CountHistory {
+  const CountHistory({
+    required this.id,
+    required this.numeroToma,
+    required this.agencia,
+    required this.estado,
+    required this.lineas,
+    required this.unidades,
+    required this.fecha,
+  });
+
+  final int id;
+  final String numeroToma;
+  final String agencia;
+  final String estado;
+  final int lineas;
+  final double unidades;
+  final String fecha;
+
+  factory CountHistory.fromJson(Map<String, dynamic> json) {
+    return CountHistory(
+      id: int.tryParse('${json['id']}') ?? 0,
+      numeroToma: '${json['numero_toma'] ?? json['nombre_toma'] ?? ''}',
+      agencia: '${json['agencia'] ?? ''}',
+      estado: '${json['estado'] ?? ''}',
+      lineas: int.tryParse('${json['lineas'] ?? 0}') ?? 0,
+      unidades: double.tryParse('${json['unidades'] ?? 0}') ?? 0,
+      fecha: '${json['fecha_finalizacion'] ?? json['fecha_inicio'] ?? ''}',
+    );
+  }
+}
+
 class Product {
   const Product({
     required this.id,

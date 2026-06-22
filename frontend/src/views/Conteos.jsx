@@ -20,6 +20,7 @@ export function Conteos({ request, token, user }) {
   const [agencias, setAgencias] = useState([]);
   const [from, setFrom] = useState(defaultReportRange().from);
   const [to, setTo] = useState(defaultReportRange().to);
+  const [status, setStatus] = useState('todos');
   const [selected, setSelected] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [resumen, setResumen] = useState(null);
@@ -37,9 +38,12 @@ export function Conteos({ request, token, user }) {
     }
   }, [isAdmin, request]);
 
-  const filtered = useMemo(() => items.filter((item) => isWithinRange(item.fecha_inicio || item.fecha_finalizacion, from, to)), [items, from, to]);
+  const filtered = useMemo(() => items.filter((item) => {
+    const inRange = isWithinRange(item.fecha_inicio || item.fecha_finalizacion, from, to);
+    return inRange && (status === 'todos' || item.estado === status);
+  }), [from, items, status, to]);
   const dailyRows = useMemo(() => buildDailyReport(filtered), [filtered]);
-  const tomaRows = useMemo(() => buildTomaReport(items), [items]);
+  const tomaRows = useMemo(() => buildTomaReport(items).filter((row) => status === 'todos' || (status === 'finalizado' ? row.status === 'done' : row.status === 'open')), [items, status]);
 
   async function refreshReports() {
     const data = await request('/conteos');
@@ -320,7 +324,15 @@ export function Conteos({ request, token, user }) {
             Hasta
             <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
           </label>
-          <button className="primary" type="button">
+          <label>
+            Estado
+            <select value={status} onChange={(event) => setStatus(event.target.value)}>
+              <option value="todos">Todos</option>
+              <option value="borrador">Borradores</option>
+              <option value="finalizado">Finalizados</option>
+            </select>
+          </label>
+          <button className="primary" type="button" onClick={refreshReports}>
             <Search size={18} />
             Consultar
           </button>

@@ -127,6 +127,17 @@ class ApiClient {
         .toList();
   }
 
+  Future<List<CountHistory>> historial() async {
+    final response = await _send(
+      _http.get(_uri('/historial'), headers: _headers()),
+    );
+    final data = await _decode(response);
+    final list = data['conteos'] is List ? data['conteos'] as List : const [];
+    return list
+        .map((item) => CountHistory.fromJson(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
   Future<int> iniciarConteo(int tomaId) async {
     final response = await _send(
       _http.post(

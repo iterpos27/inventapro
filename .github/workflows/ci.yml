@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: |
             backend/package-lock.json
@@ -36,3 +36,27 @@ jobs:
 
       - name: Audit frontend high risk
         run: npm audit --omit=dev --audit-level=high --prefix frontend
+
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Analyze mobile
+        working-directory: mobile
+        run: flutter analyze
+
+      - name: Test mobile
+        working-directory: mobile
+        run: flutter test

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { config } from './config.js';
+import { pool } from './db/pool.js';
 import { createRateLimiter } from './middleware/rateLimit.js';
 import { mobileApi } from './routes/mobileApi.js';
 import { webApi } from './routes/webApi.js';
@@ -28,8 +29,18 @@ app.use(cors({ origin: config.frontendUrl, credentials: true }));
 app.use(express.json({ limit: config.jsonLimit }));
 app.use(morgan('dev'));
 
-app.get('/health', (req, res) => {
-  res.json({ ok: true, service: 'inventapro-backend' });
+app.get('/live', (req, res) => {
+  res.json({ ok: true, service: 'inventapro-backend', uptime_seconds: Math.floor(process.uptime()) });
+});
+
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ ok: true, service: 'inventapro-backend', database: 'ready', uptime_seconds: Math.floor(process.uptime()) });
+  } catch (error) {
+    console.error('Health check de PostgreSQL fallido:', error);
+    res.status(503).json({ ok: false, service: 'inventapro-backend', database: 'unavailable' });
+  }
 });
 
 app.use('/api/admin/auth/login', loginLimiter);
