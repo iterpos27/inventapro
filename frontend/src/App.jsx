@@ -16,6 +16,7 @@ import { Conteos } from './views/Conteos';
 import { Agencias } from './views/Agencias';
 import { Usuarios } from './views/Usuarios';
 import { Tomas } from './views/Tomas';
+import { Branding } from './views/Branding';
 
 function readStoredUser() {
   try {
@@ -36,6 +37,13 @@ export default function App() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
   const [accountError, setAccountError] = useState('');
+  const [branding, setBranding] = useState({
+    brand_name: 'InventaPro',
+    brand_abbreviation: 'IP',
+    brand_subtitle: 'Sistema de Conteo e Inventario',
+    brand_color_primary: '#1c4f82',
+    brand_color_secondary: '#2864a3'
+  });
 
   const clearSession = useCallback(() => {
     localStorage.removeItem('inventapro_token');
@@ -47,6 +55,21 @@ export default function App() {
   const request = useMemo(() => api(token, clearSession), [clearSession, token]);
   const navItems = useMemo(() => navForUser(user), [user]);
   const defaultRoute = navItems[0]?.id || 'conteo_borradores';
+
+  useEffect(() => {
+    // Cargar branding desde endpoint público
+    api()('/branding')
+      .then((data) => {
+        if (data?.branding) {
+          setBranding(data.branding);
+          const primary = data.branding.brand_color_primary || '#1c4f82';
+          const secondary = data.branding.brand_color_secondary || '#2864a3';
+          document.documentElement.style.setProperty('--primary-color', primary);
+          document.documentElement.style.setProperty('--secondary-color', secondary);
+        }
+      })
+      .catch((err) => console.error('Error cargando branding:', err));
+  }, []);
 
   useEffect(() => {
     if (user && !navForUser(user).some((item) => item.id === route)) {
@@ -121,7 +144,7 @@ export default function App() {
   }
 
   if (!token || !user) {
-    return <Login onLogin={onLogin} />;
+    return <Login onLogin={onLogin} branding={branding} />;
   }
 
   const Current = {
@@ -130,12 +153,13 @@ export default function App() {
     productos: Productos,
     conteos: Conteos,
     agencias: Agencias,
-    usuarios: Usuarios
+    usuarios: Usuarios,
+    branding: Branding
   }[route] || ({ conteo_borradores: MiConteo, dashboard: Dashboard }[defaultRoute]);
 
   return (
     <div className="shell">
-      <Sidebar items={navItems} route={route} setRoute={setRoute} open={mobileOpen} setOpen={setMobileOpen} />
+      <Sidebar items={navItems} route={route} setRoute={setRoute} open={mobileOpen} setOpen={setMobileOpen} branding={branding} />
       <main className="main">
         <header className="topbar">
           <button className="icon-btn mobile-only" onClick={() => setMobileOpen(true)} aria-label="Abrir menu">
@@ -177,7 +201,7 @@ export default function App() {
             ) : null}
           </div>
         </header>
-        <Current request={request} user={user} token={token} setRoute={setRoute} />
+        <Current request={request} user={user} token={token} setRoute={setRoute} branding={branding} setBranding={setBranding} />
         {passwordOpen ? (
           <Modal title="Cambiar contrasena" onClose={() => setPasswordOpen(false)} size="sm">
             <form className="modal-form user-modal-form" onSubmit={changePassword}>

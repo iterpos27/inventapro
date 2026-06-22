@@ -1,81 +1,115 @@
 import { AppError } from '../utils/errors.js';
 import { exportConteoExcel } from '../services/excelService.js';
+import { pool } from '../db/pool.js';
 
 export async function closeExpiredTomas(db, tomaId = null) {
-  const params = [];
-  let filter = "estado = 'abierta'";
-  if (tomaId) {
-    params.push(tomaId);
-    filter += ` AND id = $${params.length}`;
-  }
+  const isPool = typeof db.connect === 'function';
+  const client = isPool ? await db.connect() : db;
 
-  // Obtener tomas vencidas para procesarlas individualmente en transacción
-  const expired = await db.query(
-    `SELECT id FROM tomas_fisicas
-     WHERE ${filter}
-       AND fecha_cierre IS NOT NULL
-       AND (
-         fecha_cierre < CURRENT_DATE
-         OR (fecha_cierre = CURRENT_DATE AND hora_fin IS NOT NULL AND hora_fin::time < CURRENT_TIME)
-       )
-     ORDER BY id`,
-    params
-  );
+  try {
+    if (isPool) {
+      await client.query('BEGIN');
+    }
 
-  for (const row of expired.rows) {
-    const tId = Number(row.id);
-    try {
-      // Finalizar conteos en borrador que tengan detalle → generar Excel
-      const borradores = await db.query(
-        `SELECT c.id, c.usuario_id
-         FROM conteos c
-         INNER JOIN conteo_detalle d ON d.conteo_id = c.id
-         WHERE c.toma_id = $1 AND c.estado = 'borrador'
-         GROUP BY c.id, c.usuario_id`,
-        [tId]
-      );
-
-      for (const conteo of borradores.rows) {
-        try {
-          // Generar Excel si es posible (no bloquea el cierre si falla)
-          await exportConteoExcel(Number(conteo.id), { id: conteo.usuario_id, rol: 'usuario' });
-        } catch (_) {
-          // No crítico: continuar cerrando aunque falle la exportación
-        }
-        await db.query(
-          "UPDATE conteos SET estado = 'finalizado', fecha_finalizacion = COALESCE(fecha_finalizacion, NOW()), updated_at = NOW() WHERE id = $1",
-          [conteo.id]
-        );
-        await db.query(
-          "UPDATE toma_usuarios SET estado = 'finalizado' WHERE toma_id = $1 AND usuario_id = $2 AND estado != 'finalizado'",
-          [tId, conteo.usuario_id]
-        );
+    // Adquirir un advisory lock de nivel de transacción para evitar ejecuciones paralelas (ID: 20260622)
+    const lockResult = await client.query('SELECT pg_try_advisory_xact_lock(20260622)');
+    const hasLock = lockResult.rows[0]?.pg_try_advisory_xact_lock;
+    if (!hasLock) {
+      // Si otra instancia ya tiene el lock, salimos silenciosamente
+      if (isPool) {
+        await client.query('ROLLBACK');
       }
+      return;
+    }
 
-      // Cerrar la toma
-      await db.query(
-        "UPDATE tomas_fisicas SET estado = 'finalizada', fecha_finalizacion = COALESCE(fecha_finalizacion, NOW()) WHERE id = $1 AND estado = 'abierta'",
-        [tId]
-      );
+    const params = [];
+    let filter = "estado = 'abierta'";
+    if (tomaId) {
+      params.push(tomaId);
+      filter += ` AND id = $${params.length}`;
+    }
 
-      // Refrescar resumen
-      await refreshTomaSummary(db, tId);
+    // Obtener tomas vencidas para procesarlas
+    const expired = await client.query(
+      `SELECT id FROM tomas_fisicas
+       WHERE ${filter}
+         AND fecha_cierre IS NOT NULL
+         AND (
+           fecha_cierre < CURRENT_DATE
+           OR (fecha_cierre = CURRENT_DATE AND hora_fin IS NOT NULL AND hora_fin::time < CURRENT_TIME)
+         )
+       ORDER BY id`,
+      params
+    );
 
-      // Registrar en audit log
+    for (const row of expired.rows) {
+      const tId = Number(row.id);
       try {
-        await db.query(
-          "INSERT INTO audit_logs (action, entity, entity_id, details) VALUES ('auto_close', 'toma', $1, $2)",
-          [tId, JSON.stringify({ reason: 'expired_window' })]
+        // Finalizar conteos en borrador que tengan detalle → generar Excel
+        const borradores = await client.query(
+          `SELECT c.id, c.usuario_id
+           FROM conteos c
+           INNER JOIN conteo_detalle d ON d.conteo_id = c.id
+           WHERE c.toma_id = $1 AND c.estado = 'borrador'
+           GROUP BY c.id, c.usuario_id`,
+          [tId]
         );
-      } catch (_) { /* No crítico */ }
-    } catch (err) {
-      // Log del error pero continuar con la siguiente toma
-      try {
-        await db.query(
-          "INSERT INTO app_logs (level, event, message, context) VALUES ('error', 'auto_close_toma_failed', $1, $2)",
-          [`No se pudo cerrar toma vencida ${tId}`, JSON.stringify({ toma_id: tId, error: err.message })]
+
+        for (const conteo of borradores.rows) {
+          try {
+            // Generar Excel si es posible (no bloquea el cierre si falla)
+            await exportConteoExcel(Number(conteo.id), { id: conteo.usuario_id, rol: 'usuario' }, client);
+          } catch (_) {
+            // No crítico: continuar cerrando aunque falle la exportación
+          }
+          await client.query(
+            "UPDATE conteos SET estado = 'finalizado', fecha_finalizacion = COALESCE(fecha_finalizacion, NOW()), updated_at = NOW() WHERE id = $1",
+            [conteo.id]
+          );
+          await client.query(
+            "UPDATE toma_usuarios SET estado = 'finalizado' WHERE toma_id = $1 AND usuario_id = $2 AND estado != 'finalizado'",
+            [tId, conteo.usuario_id]
+          );
+        }
+
+        // Cerrar la toma
+        await client.query(
+          "UPDATE tomas_fisicas SET estado = 'finalizada', fecha_finalizacion = COALESCE(fecha_finalizacion, NOW()) WHERE id = $1 AND estado = 'abierta'",
+          [tId]
         );
-      } catch (_) { /* ignore */ }
+
+        // Refrescar resumen
+        await refreshTomaSummary(client, tId);
+
+        // Registrar en audit log
+        try {
+          await client.query(
+            "INSERT INTO audit_logs (action, entity, entity_id, details) VALUES ('auto_close', 'toma', $1, $2)",
+            [tId, JSON.stringify({ reason: 'expired_window' })]
+          );
+        } catch (_) { /* No crítico */ }
+      } catch (err) {
+        // Log del error pero continuar con la siguiente toma
+        try {
+          await client.query(
+            "INSERT INTO app_logs (level, event, message, context) VALUES ('error', 'auto_close_toma_failed', $1, $2)",
+            [`No se pudo cerrar toma vencida ${tId}`, JSON.stringify({ toma_id: tId, error: err.message })]
+          );
+        } catch (_) { /* ignore */ }
+      }
+    }
+
+    if (isPool) {
+      await client.query('COMMIT');
+    }
+  } catch (error) {
+    if (isPool) {
+      await client.query('ROLLBACK');
+    }
+    throw error;
+  } finally {
+    if (isPool) {
+      client.release();
     }
   }
 }

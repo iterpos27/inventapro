@@ -3,6 +3,8 @@
   font-family: Arial, Helvetica, "Segoe UI", sans-serif;
   background: #f2f6fb;
   color: #003a70;
+  --primary-color: #1c4f82;
+  --secondary-color: #2864a3;
 }
 
 * {
@@ -37,7 +39,7 @@ button {
   position: sticky;
   top: 0;
   height: 100vh;
-  background: #1c4f82;
+  background: var(--primary-color);
   color: white;
   padding: 0 10px 16px;
   box-shadow: 8px 0 24px rgba(18, 61, 100, 0.12);
@@ -74,7 +76,7 @@ button {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: #2864a3;
+  background: var(--secondary-color);
   border: 2px solid rgba(255, 255, 255, 0.32);
   color: white;
   font-weight: 800;
@@ -3057,5 +3059,222 @@ th {
   .user-conteo-active .operation-actions .draft-save-action:hover {
     background: #f4f8fd;
     transform: none;
+  }
+}
+
+/* Branding Page Styles */
+.branding-page {
+  display: grid;
+  gap: 24px;
+}
+
+.grid-2-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.section-desc {
+  color: #667085;
+  font-size: 13px;
+  margin-top: 4px;
+  margin-bottom: 20px;
+}
+
+.branding-form {
+  display: grid;
+  gap: 16px;
+}
+
+.color-inputs-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.color-picker-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 6px 12px;
+  background: white;
+}
+
+.color-picker-wrap input[type="color"] {
+  border: none;
+  background: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.color-picker-wrap input[type="text"] {
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  width: 100%;
+}
+
+.form-actions-right {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+/* Theme Preview */
+.theme-preview-box {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  border: 1px solid #eaecf0;
+  border-radius: 12px;
+  overflow: hidden;
+  height: 340px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04);
+}
+
+.preview-sidebar {
+  color: white;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preview-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.preview-logo-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.preview-brand-info {
+  display: grid;
+}
+
+.preview-brand-info strong {
+  font-size: 13px;
+  line-height: 1.1;
+}
+
+.preview-brand-info span {
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+.preview-nav-item {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.preview-nav-item.active {
+  background: rgba(255, 255, 255, 0.12);
+  opacity: 1;
+  font-weight: bold;
+}
+
+.preview-content-area {
+  background: #f9fafb;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.preview-header {
+  background: white;
+  padding: 12px 20px;
+  border-bottom: 1px solid #eaecf0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.preview-user-profile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preview-user-profile .avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #f2f4f7;
+  color: #667085;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.preview-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.preview-stat-card {
+  background: white;
+  padding: 16px;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05);
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: #101828;
+}
+
+.stat-value-desc {
+  font-size: 11px;
+  color: #667085;
+  margin-top: 4px;
+}
+
+.preview-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.primary-btn-mock {
+  border: none;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.secondary-btn-mock {
+  background: white;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+@media (max-width: 1024px) {
+  .grid-2-col {
+    grid-template-columns: 1fr;
   }
 }

@@ -788,8 +788,10 @@ webApi.get('/conteos/:id/excel', requireWebUser, asyncHandler(async (req, res) =
   if (conteoId <= 0) {
     throw new AppError('Conteo invalido', 422);
   }
-  const file = await exportConteoExcel(conteoId, req.user);
-  res.download(file.fullPath, file.filename);
+  const { buffer, filename } = await exportConteoExcel(conteoId, req.user);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buffer);
 }));
 
 webApi.post('/tomas/:id/consolidado', requireWebUser, requirePermission('reports'), asyncHandler(async (req, res) => {
@@ -797,8 +799,8 @@ webApi.post('/tomas/:id/consolidado', requireWebUser, requirePermission('reports
   if (tomaId <= 0) {
     throw new AppError('Toma invalida', 422);
   }
-  const file = await generateConsolidadoExcel(tomaId);
-  res.json({ ok: true, archivo: file.filename, download_url: `/api/admin/tomas/${tomaId}/consolidado` });
+  const { filename } = await generateConsolidadoExcel(tomaId);
+  res.json({ ok: true, archivo: filename, download_url: `/api/admin/tomas/${tomaId}/consolidado` });
 }));
 
 webApi.get('/tomas/:id/consolidado', requireWebUser, requirePermission('reports'), asyncHandler(async (req, res) => {
@@ -806,8 +808,10 @@ webApi.get('/tomas/:id/consolidado', requireWebUser, requirePermission('reports'
   if (tomaId <= 0) {
     throw new AppError('Toma invalida', 422);
   }
-  const file = await generateConsolidadoExcel(tomaId);
-  res.download(file.fullPath, file.filename);
+  const { buffer, filename } = await generateConsolidadoExcel(tomaId);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buffer);
 }));
 
 function publicUser(user) {
@@ -1077,3 +1081,35 @@ async function saveWebConteo(userId, conteoId, expectedVersion, items, finish) {
     return { ok: true, conteo_id: conteoId, conteo_version: version, lineas, estado: finish ? 'finalizado' : 'borrador' };
   });
 }
+
+webApi.get('/branding', asyncHandler(async (req, res) => {
+  const { rows } = await pool.query('SELECT key, value FROM system_config');
+  const branding = {};
+  rows.forEach((row) => {
+    branding[row.key] = row.value;
+  });
+  res.json({ ok: true, branding });
+}));
+
+webApi.put('/branding', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const { brand_name, brand_abbreviation, brand_subtitle, brand_color_primary, brand_color_secondary } = req.body;
+  if (!brand_name || !brand_abbreviation) {
+    throw new AppError('El nombre y la abreviacion de marca son obligatorios', 422);
+  }
+
+  await withTransaction(async (db) => {
+    const keys = { brand_name, brand_abbreviation, brand_subtitle, brand_color_primary, brand_color_secondary };
+    for (const [key, value] of Object.entries(keys)) {
+      if (value !== undefined) {
+        await db.query(
+          `INSERT INTO system_config (key, value, updated_at)
+           VALUES ($1, $2, NOW())
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+          [key, value]
+        );
+      }
+    }
+  });
+
+  res.json({ ok: true, message: 'Configuracion de marca actualizada' });
+}));

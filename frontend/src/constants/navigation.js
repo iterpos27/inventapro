@@ -4,7 +4,8 @@ import {
   FileText,
   Boxes,
   Users,
-  Building2
+  Building2,
+  Palette
 } from 'lucide-react';
 
 export const nav = [
@@ -13,7 +14,8 @@ export const nav = [
   { id: 'conteos', label: 'Reportes', icon: FileText, group: 'main' },
   { id: 'productos', label: 'Productos', icon: Boxes, group: 'main' },
   { id: 'usuarios', label: 'Usuarios', icon: Users, group: 'Administracion' },
-  { id: 'agencias', label: 'Agencias', icon: Building2, group: 'Administracion' }
+  { id: 'agencias', label: 'Agencias', icon: Building2, group: 'Administracion' },
+  { id: 'branding', label: 'Personalizacion', icon: Palette, group: 'Administracion' }
 ];
 
 export function navForUser(user) {

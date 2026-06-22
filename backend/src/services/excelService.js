@@ -22,7 +22,7 @@ export function importStorageDir() {
   return importDir;
 }
 
-export async function exportConteoExcel(conteoId, user) {
+export async function exportConteoExcel(conteoId, user, db = pool) {
   const params = [conteoId];
   let authSql = '';
   if (!roleCan(user.rol, 'reports')) {
@@ -30,7 +30,7 @@ export async function exportConteoExcel(conteoId, user) {
     authSql = ` AND c.usuario_id = $${params.length}`;
   }
 
-  const { rows } = await pool.query(
+  const { rows } = await db.query(
     `SELECT d.codigo, d.descripcion, d.cantidad, u.nombre AS usuario
      FROM conteo_detalle d
      INNER JOIN conteos c ON c.id = d.conteo_id
@@ -55,21 +55,19 @@ export async function exportConteoExcel(conteoId, user) {
   rows.forEach((row) => sheet.addRow(excelSafeRow(row)));
   styleSheet(sheet);
 
-  await ensureStorage();
   const filename = `conteo_${conteoId}_${timestamp()}.xlsx`;
-  const fullPath = path.join(exportDir, filename);
-  await workbook.xlsx.writeFile(fullPath);
-  return { fullPath, filename };
+  const buffer = await workbook.xlsx.writeBuffer();
+  return { buffer, filename };
 }
 
-export async function generateConsolidadoExcel(tomaId) {
-  const tomaResult = await pool.query('SELECT id, numero_toma, nombre_toma FROM tomas_fisicas WHERE id = $1', [tomaId]);
+export async function generateConsolidadoExcel(tomaId, db = pool) {
+  const tomaResult = await db.query('SELECT id, numero_toma, nombre_toma FROM tomas_fisicas WHERE id = $1', [tomaId]);
   const toma = tomaResult.rows[0];
   if (!toma) {
     throw new AppError('Toma no encontrada', 404);
   }
 
-  const usuariosResult = await pool.query(
+  const usuariosResult = await db.query(
     `SELECT DISTINCT u.id, u.nombre
      FROM conteos c
      INNER JOIN usuarios u ON u.id = c.usuario_id
@@ -82,7 +80,7 @@ export async function generateConsolidadoExcel(tomaId) {
     throw new AppError('Sin usuarios finalizados', 422);
   }
 
-  const detallesResult = await pool.query(
+  const detallesResult = await db.query(
     `SELECT d.producto_id, d.codigo, d.descripcion, c.usuario_id, SUM(d.cantidad)::numeric AS cantidad
      FROM conteos c
      INNER JOIN conteo_detalle d ON d.conteo_id = c.id
@@ -137,12 +135,10 @@ export async function generateConsolidadoExcel(tomaId) {
   styleSheet(sheet);
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-  await ensureStorage();
   const filename = `consolidado_toma_${tomaId}_${timestamp()}.xlsx`;
-  const fullPath = path.join(exportDir, filename);
-  await workbook.xlsx.writeFile(fullPath);
-  await pool.query('UPDATE tomas_fisicas SET archivo_excel = $1 WHERE id = $2', [filename, tomaId]);
-  return { fullPath, filename };
+  const buffer = await workbook.xlsx.writeBuffer();
+  await db.query('UPDATE tomas_fisicas SET archivo_excel = $1 WHERE id = $2', [filename, tomaId]);
+  return { buffer, filename };
 }
 
 export async function importProductsFromFile(file, userId) {

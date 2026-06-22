@@ -1,17 +1,22 @@
 import React, { useState } from 'react';
 import { X, Settings, ChevronDown } from 'lucide-react';
 
-export function Sidebar({ items, route, setRoute, open, setOpen }) {
+export function Sidebar({ items, route, setRoute, open, setOpen, branding }) {
   const [adminOpen, setAdminOpen] = useState(false);
   const grouped = groupNav(items);
+  const { brand_name, brand_abbreviation, brand_subtitle } = branding || {
+    brand_name: 'InventaPro',
+    brand_abbreviation: 'IP',
+    brand_subtitle: 'Sistema de Conteo e Inventario'
+  };
   return (
     <>
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="brand">
-          <div className="brand-mark">CR</div>
+          <div className="brand-mark">{brand_abbreviation}</div>
           <div>
-            <strong>InventaPro</strong>
-            <span>SISTEMA DE INVENTARIO</span>
+            <strong>{brand_name}</strong>
+            <span>{brand_subtitle}</span>
           </div>
           <button className="icon-btn close mobile-only" onClick={() => setOpen(false)} aria-label="Cerrar menu">
             <X size={18} />

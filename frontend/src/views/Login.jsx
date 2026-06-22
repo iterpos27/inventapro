@@ -2,10 +2,15 @@ import React, { useState } from 'react';
 import { api } from '../services/api';
 import { FeedbackToast } from '../components/FeedbackToast';
 
-export function Login({ onLogin }) {
+export function Login({ onLogin, branding }) {
   const [form, setForm] = useState({ usuario: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { brand_name, brand_abbreviation, brand_subtitle } = branding || {
+    brand_name: 'InventaPro',
+    brand_abbreviation: 'IP',
+    brand_subtitle: 'Sistema de Conteo e Inventario'
+  };
 
   async function submit(event) {
     event.preventDefault();
@@ -25,10 +30,10 @@ export function Login({ onLogin }) {
     <div className="login-screen">
       <form className="login-panel" onSubmit={submit}>
         <div className="brand large">
-          <div className="brand-mark">IP</div>
+          <div className="brand-mark">{brand_abbreviation}</div>
           <div>
-            <strong>INVENTAPRO</strong>
-            <span>Sistema de Conteo e Inventario</span>
+            <strong>{brand_name.toUpperCase()}</strong>
+            <span>{brand_subtitle}</span>
           </div>
         </div>
         <label>
@@ -43,7 +48,7 @@ export function Login({ onLogin }) {
         <button className="primary" disabled={loading}>{loading ? 'Ingresando...' : 'Ingresar'}</button>
       </form>
       <footer className="login-footer">
-        <span>InventaPro</span>
+        <span>{brand_name}</span>
         <span>Version 1.1.0</span>
       </footer>
     </div>
