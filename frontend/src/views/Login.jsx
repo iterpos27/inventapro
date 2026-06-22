@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { api } from '../services/api';
 import { FeedbackToast } from '../components/FeedbackToast';
 
@@ -6,6 +7,7 @@ export function Login({ onLogin, branding }) {
   const [form, setForm] = useState({ usuario: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const { brand_name, brand_abbreviation, brand_subtitle } = branding || {
     brand_name: 'InventaPro',
     brand_abbreviation: 'IP',
@@ -42,7 +44,12 @@ export function Login({ onLogin, branding }) {
         </label>
         <label>
           Contrasena
-          <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          <div className="password-input-wrap">
+            <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            <button type="button" className="toggle-password-btn" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}>
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
         </label>
         <FeedbackToast error={error} onClose={() => setError('')} />
         <button className="primary" disabled={loading}>{loading ? 'Ingresando...' : 'Ingresar'}</button>

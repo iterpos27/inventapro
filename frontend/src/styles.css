@@ -3278,3 +3278,43 @@ th {
     grid-template-columns: 1fr;
   }
 }
+
+/* Password Input Toggle Styles */
+.password-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-input-wrap input {
+  padding-right: 40px !important;
+  width: 100%;
+}
+
+.toggle-password-btn {
+  position: absolute;
+  right: 12px;
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  color: #667085;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  height: 100%;
+  width: auto;
+  min-width: 0;
+  box-shadow: none !important;
+  outline: none;
+}
+
+.toggle-password-btn:hover {
+  color: #344054;
+  background: none !important;
+}
+
+.toggle-password-btn svg {
+  display: block;
+}

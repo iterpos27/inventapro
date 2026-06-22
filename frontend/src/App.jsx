@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, KeyRound, LogOut, Menu, ShieldX, UserCircle } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, KeyRound, LogOut, Menu, ShieldX, UserCircle } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { FeedbackToast } from './components/FeedbackToast';
 import { Modal } from './components/Modal';
@@ -44,6 +44,10 @@ export default function App() {
     brand_color_primary: '#1c4f82',
     brand_color_secondary: '#2864a3'
   });
+  
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const clearSession = useCallback(() => {
     localStorage.removeItem('inventapro_token');
@@ -51,6 +55,7 @@ export default function App() {
     setToken('');
     setUser(null);
     setCheckingSession(false);
+    setAccountOpen(false); // Cierra el menú al salir
   }, []);
   const request = useMemo(() => api(token, clearSession), [clearSession, token]);
   const navItems = useMemo(() => navForUser(user), [user]);
@@ -66,10 +71,30 @@ export default function App() {
           const secondary = data.branding.brand_color_secondary || '#2864a3';
           document.documentElement.style.setProperty('--primary-color', primary);
           document.documentElement.style.setProperty('--secondary-color', secondary);
+
+          // Actualizar favicon dinámicamente según iniciales y color de marca
+          const abbr = data.branding.brand_abbreviation || 'IP';
+          const favicon = document.querySelector('link[rel="icon"]');
+          const svgHtml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="${encodeURIComponent(primary)}"/><text x="50" y="55" fill="white" font-size="52" font-weight="bold" font-family="sans-serif" dominant-baseline="middle" text-anchor="middle">${abbr}</text></svg>`;
+          if (favicon) {
+            favicon.href = `data:image/svg+xml,${svgHtml}`;
+          } else {
+            const link = document.createElement('link');
+            link.rel = 'icon';
+            link.type = 'image/svg+xml';
+            link.href = `data:image/svg+xml,${svgHtml}`;
+            document.head.appendChild(link);
+          }
         }
       })
       .catch((err) => console.error('Error cargando branding:', err));
   }, []);
+
+  useEffect(() => {
+    // Actualizar el título de la pestaña dinámicamente
+    const activeLabel = navItems.find((item) => item.id === route)?.label || 'Panel';
+    document.title = `${activeLabel} | ${branding.brand_name}`;
+  }, [route, branding, navItems]);
 
   useEffect(() => {
     if (user && !navForUser(user).some((item) => item.id === route)) {
@@ -203,13 +228,37 @@ export default function App() {
         </header>
         <Current request={request} user={user} token={token} setRoute={setRoute} branding={branding} setBranding={setBranding} />
         {passwordOpen ? (
-          <Modal title="Cambiar contrasena" onClose={() => setPasswordOpen(false)} size="sm">
+          <Modal title="Cambiar contrasena" onClose={() => { setPasswordOpen(false); setShowCurrentPassword(false); setShowNewPassword(false); setShowConfirmPassword(false); }} size="sm">
             <form className="modal-form user-modal-form" onSubmit={changePassword}>
-              <label>Contrasena actual<input type="password" value={passwordForm.current_password} onChange={(event) => setPasswordForm({ ...passwordForm, current_password: event.target.value })} required /></label>
-              <label>Nueva contrasena<input type="password" minLength="10" value={passwordForm.new_password} onChange={(event) => setPasswordForm({ ...passwordForm, new_password: event.target.value })} required /></label>
-              <label>Confirmar contrasena<input type="password" minLength="10" value={passwordForm.confirm_password} onChange={(event) => setPasswordForm({ ...passwordForm, confirm_password: event.target.value })} required /></label>
+              <label>
+                Contrasena actual
+                <div className="password-input-wrap">
+                  <input type={showCurrentPassword ? "text" : "password"} value={passwordForm.current_password} onChange={(event) => setPasswordForm({ ...passwordForm, current_password: event.target.value })} required />
+                  <button type="button" className="toggle-password-btn" onClick={() => setShowCurrentPassword(!showCurrentPassword)} aria-label={showCurrentPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}>
+                    {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </label>
+              <label>
+                Nueva contrasena
+                <div className="password-input-wrap">
+                  <input type={showNewPassword ? "text" : "password"} minLength="10" value={passwordForm.new_password} onChange={(event) => setPasswordForm({ ...passwordForm, new_password: event.target.value })} required />
+                  <button type="button" className="toggle-password-btn" onClick={() => setShowNewPassword(!showNewPassword)} aria-label={showNewPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}>
+                    {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </label>
+              <label>
+                Confirmar contrasena
+                <div className="password-input-wrap">
+                  <input type={showConfirmPassword ? "text" : "password"} minLength="10" value={passwordForm.confirm_password} onChange={(event) => setPasswordForm({ ...passwordForm, confirm_password: event.target.value })} required />
+                  <button type="button" className="toggle-password-btn" onClick={() => setShowConfirmPassword(!showConfirmPassword)} aria-label={showConfirmPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}>
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </label>
               <FeedbackToast error={accountError} onClose={() => setAccountError('')} />
-              <div className="modal-actions"><button type="button" className="secondary-action" onClick={() => setPasswordOpen(false)}>Cancelar</button><button className="primary" type="submit">Actualizar</button></div>
+              <div className="modal-actions"><button type="button" className="secondary-action" onClick={() => { setPasswordOpen(false); setShowCurrentPassword(false); setShowNewPassword(false); setShowConfirmPassword(false); }}>Cancelar</button><button className="primary" type="submit">Actualizar</button></div>
             </form>
           </Modal>
         ) : null}
