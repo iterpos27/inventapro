@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import bcrypt from 'bcryptjs';
 import express from 'express';
 import jwt from 'jsonwebtoken';
@@ -7,6 +9,7 @@ import { config } from '../config.js';
 import { pool, withTransaction } from '../db/pool.js';
 import { requirePermission, requireWebUser } from '../middleware/auth.js';
 import {
+  brandingStorageDir,
   exportConteoExcel,
   generateConsolidadoExcel,
   importProductsFromFile,
@@ -36,6 +39,22 @@ const upload = multer({
     const extension = String(file.originalname || '').toLowerCase().match(/\.[^.]+$/)?.[0];
     const allowed = ['.xlsx', '.csv'].includes(extension);
     callback(allowed ? null : new AppError('Formato no permitido. Use .xlsx o .csv', 422), allowed);
+  }
+});
+const brandingUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, callback) => callback(null, brandingStorageDir()),
+    filename: (req, file, callback) => {
+      const extension = String(file.originalname || '').toLowerCase().match(/\.[^.]+$/)?.[0] || '';
+      const safeBase = file.fieldname === 'brand_logo' ? 'logo' : 'favicon';
+      callback(null, `branding-${safeBase}-${Date.now()}${extension}`);
+    }
+  }),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, callback) => {
+    const extension = String(file.originalname || '').toLowerCase().match(/\.[^.]+$/)?.[0];
+    const allowed = ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.ico'].includes(extension || '');
+    callback(allowed ? null : new AppError('Formato no permitido para branding. Use png, jpg, svg, webp o ico', 422), allowed);
   }
 });
 const productSearchCache = new Map();
@@ -1248,21 +1267,39 @@ async function saveWebConteo(userId, conteoId, expectedVersion, items, finish) {
 
 webApi.get('/branding', asyncHandler(async (req, res) => {
   const { rows } = await pool.query('SELECT key, value FROM system_config');
-  const branding = {};
-  rows.forEach((row) => {
-    branding[row.key] = row.value;
-  });
+  const branding = brandingWithAbsoluteAssets(rows, req);
   res.json({ ok: true, branding });
 }));
 
-webApi.put('/branding', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+webApi.put('/branding', requireWebUser, requirePermission('admin'), brandingUpload.fields([
+  { name: 'brand_logo', maxCount: 1 },
+  { name: 'brand_favicon', maxCount: 1 }
+]), asyncHandler(async (req, res) => {
   const { brand_name, brand_abbreviation, brand_subtitle, brand_color_primary, brand_color_secondary } = req.body;
   if (!brand_name || !brand_abbreviation) {
     throw new AppError('El nombre y la abreviacion de marca son obligatorios', 422);
   }
 
+  const current = await pool.query(
+    `SELECT key, value FROM system_config
+     WHERE key IN ('brand_logo_url', 'brand_favicon_url')`
+  );
+  const currentMap = Object.fromEntries(current.rows.map((row) => [row.key, row.value]));
+  const logoFile = req.files?.brand_logo?.[0];
+  const faviconFile = req.files?.brand_favicon?.[0];
+  const nextLogoUrl = logoFile ? `/storage/branding/${logoFile.filename}` : currentMap.brand_logo_url || '';
+  const nextFaviconUrl = faviconFile ? `/storage/branding/${faviconFile.filename}` : currentMap.brand_favicon_url || '';
+
   await withTransaction(async (db) => {
-    const keys = { brand_name, brand_abbreviation, brand_subtitle, brand_color_primary, brand_color_secondary };
+    const keys = {
+      brand_name,
+      brand_abbreviation,
+      brand_subtitle,
+      brand_logo_url: nextLogoUrl,
+      brand_favicon_url: nextFaviconUrl,
+      brand_color_primary,
+      brand_color_secondary
+    };
     for (const [key, value] of Object.entries(keys)) {
       if (value !== undefined) {
         await db.query(
@@ -1275,5 +1312,34 @@ webApi.put('/branding', requireWebUser, requirePermission('admin'), asyncHandler
     }
   });
 
-  res.json({ ok: true, message: 'Configuracion de marca actualizada' });
+  await removeReplacedBrandAsset(currentMap.brand_logo_url, nextLogoUrl);
+  await removeReplacedBrandAsset(currentMap.brand_favicon_url, nextFaviconUrl);
+
+  const { rows } = await pool.query('SELECT key, value FROM system_config');
+  res.json({
+    ok: true,
+    message: 'Configuracion de marca actualizada',
+    branding: brandingWithAbsoluteAssets(rows, req)
+  });
 }));
+
+async function removeReplacedBrandAsset(previousPath, nextPath) {
+  if (!previousPath || previousPath === nextPath || !String(previousPath).startsWith('/storage/branding/')) {
+    return;
+  }
+  const filename = path.basename(String(previousPath));
+  await fs.rm(path.join(brandingStorageDir(), filename), { force: true }).catch(() => {});
+}
+
+function brandingWithAbsoluteAssets(rows, req) {
+  const branding = {};
+  rows.forEach((row) => {
+    branding[row.key] = row.value;
+  });
+  for (const key of ['brand_logo_url', 'brand_favicon_url']) {
+    if (branding[key] && String(branding[key]).startsWith('/')) {
+      branding[key] = new URL(String(branding[key]), `${req.protocol}://${req.get('host')}`).toString();
+    }
+  }
+  return branding;
+}

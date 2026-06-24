@@ -15,6 +15,7 @@ import { errorHandler, notFound } from './utils/errors.js';
 export const app = express();
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendDist = path.resolve(dirname, '../../frontend/dist');
+const storagePublic = path.resolve(dirname, '../storage');
 
 if (config.trustProxy) {
   app.set('trust proxy', 1);
@@ -79,6 +80,7 @@ if (config.enableMobileApi) {
   app.use('/api', mobileApi);
 }
 
+app.use('/storage', express.static(storagePublic, { maxAge: config.nodeEnv === 'production' ? '7d' : 0 }));
 app.use('/api/admin', webApi);
 
 if (existsSync(frontendDist)) {

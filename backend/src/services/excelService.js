@@ -12,14 +12,20 @@ const dirname = path.dirname(fileURLToPath(import.meta.url));
 const storageRoot = path.resolve(dirname, '../../storage');
 const exportDir = path.join(storageRoot, 'exports');
 const importDir = path.join(storageRoot, 'imports');
+const brandingDir = path.join(storageRoot, 'branding');
 
 export async function ensureStorage() {
   await fs.mkdir(exportDir, { recursive: true });
   await fs.mkdir(importDir, { recursive: true });
+  await fs.mkdir(brandingDir, { recursive: true });
 }
 
 export function importStorageDir() {
   return importDir;
+}
+
+export function brandingStorageDir() {
+  return brandingDir;
 }
 
 export async function exportConteoExcel(conteoId, user, db = pool) {
