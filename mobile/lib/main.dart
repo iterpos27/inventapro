@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'api_client.dart';
 import 'config.dart';
@@ -377,7 +379,8 @@ class OperationHome extends StatefulWidget {
   State<OperationHome> createState() => _OperationHomeState();
 }
 
-class _OperationHomeState extends State<OperationHome> {
+class _OperationHomeState extends State<OperationHome>
+    with WidgetsBindingObserver {
   List<Toma> tomas = [];
   List<CountHistory> history = [];
   ConteoInfo? conteo;
@@ -388,27 +391,45 @@ class _OperationHomeState extends State<OperationHome> {
   final Map<int, FocusNode> qtyFocusNodes = {};
   Timer? searchTimer;
   Timer? autoSaveTimer;
+  StreamSubscription<List<ConnectivityResult>>? connectivitySub;
   bool loading = true;
   bool saving = false;
   String saveStatus = 'Sin cambios recientes.';
   bool _hasUnsavedChanges = false;
+  bool _syncScheduled = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      final hasNetwork = !results.contains(ConnectivityResult.none);
+      if (hasNetwork) {
+        _scheduleDraftSync();
+      }
+    });
     _loadTomas();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     searchTimer?.cancel();
     autoSaveTimer?.cancel();
+    connectivitySub?.cancel();
     searchCtrl.dispose();
     searchFocus.dispose();
     for (final node in qtyFocusNodes.values) {
       node.dispose();
     }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _scheduleDraftSync();
+    }
   }
 
   Future<void> _loadTomas() async {
@@ -448,6 +469,7 @@ class _OperationHomeState extends State<OperationHome> {
             : 'Borrador local pendiente de sincronizar.';
       });
       _startPeriodicAutoSave();
+      _scheduleDraftSync();
     } catch (err) {
       _toast('$err', isError: true);
     } finally {
@@ -623,13 +645,41 @@ class _OperationHomeState extends State<OperationHome> {
   void _startPeriodicAutoSave() {
     autoSaveTimer?.cancel();
     autoSaveTimer = Timer.periodic(const Duration(minutes: 3), (timer) {
-      if (_hasUnsavedChanges &&
-          conteo != null &&
-          validItems.isNotEmpty &&
-          !saving) {
-        _saveDraft(silent: true);
+      _scheduleDraftSync();
+    });
+  }
+
+  void _scheduleDraftSync() {
+    if (_syncScheduled) {
+      return;
+    }
+    if (!_hasUnsavedChanges || conteo == null || validItems.isEmpty || saving) {
+      return;
+    }
+    _syncScheduled = true;
+    Future<void>.delayed(const Duration(milliseconds: 250), () async {
+      _syncScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      if (_hasUnsavedChanges && conteo != null && validItems.isNotEmpty && !saving) {
+        await _saveDraft(silent: true);
       }
     });
+  }
+
+  Future<void> _openScanner() async {
+    if (conteo == null || loading || saving) {
+      return;
+    }
+    final code = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    );
+    if (!mounted || code == null || code.trim().isEmpty) {
+      return;
+    }
+    searchCtrl.text = code.trim();
+    await _handleSearchSubmit(code.trim());
   }
 
   Future<void> _saveDraft({bool silent = false}) async {
@@ -1065,16 +1115,28 @@ class _OperationHomeState extends State<OperationHome> {
             children: [
               const Text('Buscar producto'),
               const SizedBox(height: 8),
-              TextField(
-                controller: searchCtrl,
-                focusNode: searchFocus,
-                style: const TextStyle(fontSize: 13),
-                decoration: const InputDecoration(
-                  hintText: 'Codigo o descripcion',
-                  prefixIcon: Icon(Icons.search),
-                ),
-                onChanged: _search,
-                onSubmitted: _handleSearchSubmit,
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: searchCtrl,
+                      focusNode: searchFocus,
+                      style: const TextStyle(fontSize: 13),
+                      decoration: const InputDecoration(
+                        hintText: 'Codigo o descripcion',
+                        prefixIcon: Icon(Icons.search),
+                      ),
+                      onChanged: _search,
+                      onSubmitted: _handleSearchSubmit,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.tonalIcon(
+                    onPressed: _openScanner,
+                    icon: const Icon(Icons.qr_code_scanner_outlined),
+                    label: const Text('Escanear'),
+                  ),
+                ],
               ),
               if (results.isNotEmpty)
                 Container(
@@ -1363,6 +1425,70 @@ Future<void> showApiSettingsDialog(
   );
   focusNode.dispose();
   controller.dispose();
+}
+
+class BarcodeScannerScreen extends StatefulWidget {
+  const BarcodeScannerScreen({super.key});
+
+  @override
+  State<BarcodeScannerScreen> createState() => _BarcodeScannerScreenState();
+}
+
+class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
+  bool _handlingCode = false;
+
+  void _handleDetection(BarcodeCapture capture) {
+    if (_handlingCode) {
+      return;
+    }
+    for (final barcode in capture.barcodes) {
+      final raw = barcode.rawValue?.trim();
+      if (raw == null || raw.isEmpty) {
+        continue;
+      }
+      _handlingCode = true;
+      Navigator.of(context).pop(raw);
+      return;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: const Text('Escanear producto'),
+      ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          MobileScanner(
+            controller: MobileScannerController(
+              detectionSpeed: DetectionSpeed.noDuplicates,
+              facing: CameraFacing.back,
+              torchEnabled: false,
+            ),
+            onDetect: _handleDetection,
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              color: Colors.black.withValues(alpha: 0.62),
+              child: const Text(
+                'Alinee el codigo dentro de la camara para agregar el producto.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class CardBox extends StatelessWidget {

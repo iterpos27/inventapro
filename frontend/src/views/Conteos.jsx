@@ -6,7 +6,6 @@ import { downloadFile } from '../services/api';
 import {
   formatDateTime,
   formatDateOnly,
-  formatTomaTitle,
   formatPeriodDate,
   defaultReportRange,
   isWithinRange,
@@ -216,10 +215,10 @@ export function Conteos({ request, token, user }) {
         <section className="panel toma-summary-card">
           <div>
             <span className={`report-status ${selected.estado === 'finalizada' ? 'done' : 'open'}`}>{selected.estado}</span>
-            <p>{formatTomaTitle(selected.numero_toma)}</p>
-            <p>{selected.agencia || '-'}</p>
-            <p>{formatPeriodDate(selected.fecha_habilitacion, selected.hora_inicio)}</p>
-            <p>{formatPeriodDate(selected.fecha_cierre, selected.hora_fin)}</p>
+            <p>TOMA FISICA # {selected.numero_toma}</p>
+            <p>AGENCIA: {selected.agencia || ''}</p>
+            <p>HABILITACION: {formatPeriodDate(selected.fecha_habilitacion, selected.hora_inicio)}</p>
+            <p>FINALIZACION: {formatPeriodDate(selected.fecha_cierre, selected.hora_fin)}</p>
           </div>
           <aside>
             <strong>Creada por {selected.creado_por_nombre || 'Administrador'}</strong>
@@ -395,9 +394,10 @@ export function Conteos({ request, token, user }) {
               {tomaRows.map((row) => (
                 <tr key={row.id}>
                   <td>
-                    <strong>{formatTomaTitle(row.numero_toma)}</strong>
-                    <span>{row.agencia || '-'}</span>
-                    <span>{formatPeriodDate(row.fecha_habilitacion, row.hora_inicio)} - {formatPeriodDate(row.fecha_cierre, row.hora_fin)}</span>
+                    <strong>TOMA FISICA # {row.numero_toma || '-'}</strong>
+                    <span>AGENCIA: {row.agencia || ''}</span>
+                    <span>HABILITACION: {formatPeriodDate(row.fecha_habilitacion, row.hora_inicio)}</span>
+                    <span>FINALIZACION: {formatPeriodDate(row.fecha_cierre, row.hora_fin)}</span>
                   </td>
                   <td><span className={`report-status ${row.estado === 'finalizada' ? 'done' : 'open'}`}>{row.estado}</span></td>
                   <td>{row.usuarios_asignados || 0}</td>
