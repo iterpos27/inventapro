@@ -497,8 +497,10 @@ export function Conteos({ request, token, user }) {
               {summary.usuarios.map((row) => (
                 <tr key={row.id}>
                   <td>
-                    <strong>{row.nombre}</strong>
-                    <span>{row.usuario}</span>
+                    <strong>{row.nombre && row.nombre.trim() ? row.nombre : row.usuario}</strong>
+                    {row.nombre && row.nombre.trim() && row.nombre !== row.usuario ? (
+                      <span>{row.usuario}</span>
+                    ) : null}
                   </td>
                   <td>{row.tomas_asignadas}</td>
                   <td>{row.tomas_finalizadas}</td>

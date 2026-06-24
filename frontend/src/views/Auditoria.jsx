@@ -2,6 +2,38 @@ import React, { useEffect, useState } from 'react';
 import { FeedbackToast } from '../components/FeedbackToast';
 import { defaultReportRange, formatDateTime } from '../utils/helpers';
 
+function eventLabel(item) {
+  if (item.source === 'audit' && item.action === 'auto_close') {
+    return 'Cierre automatico';
+  }
+  if (item.source === 'audit' && item.action) {
+    return item.action.replaceAll('_', ' ');
+  }
+  return item.event || '-';
+}
+
+function eventSubLabel(item) {
+  if (item.source === 'audit') {
+    if (item.entity && item.entity_id) {
+      return `${item.entity} #${item.entity_id}`;
+    }
+    return item.entity || item.message || '-';
+  }
+  return item.message || '-';
+}
+
+function detailLabel(item) {
+  if (item.context && typeof item.context === 'object') {
+    if (item.context.reason === 'expired_window') {
+      return 'Motivo: ventana vencida';
+    }
+    return Object.entries(item.context)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(' | ');
+  }
+  return item.context ? JSON.stringify(item.context) : '-';
+}
+
 export function Auditoria({ request }) {
   const [from, setFrom] = useState(defaultReportRange().from);
   const [to, setTo] = useState(defaultReportRange().to);
@@ -68,13 +100,13 @@ export function Auditoria({ request }) {
                   <td>{formatDateTime(item.created_at)}</td>
                   <td><span className={`report-status ${item.source === 'audit' ? 'done' : 'open'}`}>{item.source}</span></td>
                   <td>
-                    <strong>{item.event}</strong>
-                    <span>{item.action || item.message}</span>
+                    <strong>{eventLabel(item)}</strong>
+                    <span>{eventSubLabel(item)}</span>
                   </td>
                   <td>{item.usuario_nombre || '-'}</td>
                   <td>
                     <span>{item.entity ? `${item.entity}${item.entity_id ? ` #${item.entity_id}` : ''}` : item.message}</span>
-                    <small>{item.context ? JSON.stringify(item.context) : '-'}</small>
+                    <small>{detailLabel(item)}</small>
                   </td>
                 </tr>
               ))}
