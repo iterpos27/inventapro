@@ -173,3 +173,7 @@ Los archivos Excel de `backend/storage` son temporales. Railway puede eliminarlo
 ## Respaldo automatizado
 
 El workflow de GitHub `PostgreSQL Backup` crea diariamente un respaldo cifrado con retencion de 14 dias. Requiere los secretos `DATABASE_PUBLIC_URL` y `BACKUP_ENCRYPTION_PASSWORD`. La configuracion y restauracion estan documentadas en `docs/backup-and-restore.md`.
+
+## Roadmap
+
+El plan priorizado para completar los faltantes funcionales del proyecto esta documentado en `docs/execution-roadmap.md`.

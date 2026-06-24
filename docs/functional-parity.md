@@ -26,3 +26,7 @@ Estado de migracion funcional frente al PHP activo de `centro_ruliman_inventario
 
 - Migrador de datos MySQL -> PostgreSQL para cargar datos reales.
 - Ampliar las pruebas de integracion contra una base PostgreSQL temporal.
+
+## Roadmap recomendado
+
+- El plan priorizado de ejecucion esta en `docs/execution-roadmap.md`.
