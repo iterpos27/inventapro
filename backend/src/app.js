@@ -43,6 +43,29 @@ app.get('/health', async (req, res) => {
   }
 });
 
+app.get('/metrics', async (req, res) => {
+  try {
+    const [users, tomas, finalizados, logs] = await Promise.all([
+      pool.query('SELECT COUNT(*)::int AS total FROM usuarios WHERE estado = TRUE'),
+      pool.query('SELECT COUNT(*)::int AS total FROM tomas_fisicas'),
+      pool.query("SELECT COUNT(*)::int AS total FROM conteos WHERE estado = 'finalizado'"),
+      pool.query("SELECT COUNT(*)::int AS total FROM app_logs WHERE created_at > NOW() - INTERVAL '24 hours'")
+    ]);
+    res.json({
+      ok: true,
+      uptime_seconds: Math.floor(process.uptime()),
+      metrics: {
+        usuarios_activos: users.rows[0].total,
+        tomas_total: tomas.rows[0].total,
+        conteos_finalizados: finalizados.rows[0].total,
+        eventos_app_24h: logs.rows[0].total
+      }
+    });
+  } catch (error) {
+    res.status(503).json({ ok: false, message: 'No se pudieron obtener metricas' });
+  }
+});
+
 app.use('/api/admin/auth/login', loginLimiter);
 app.use('/api/admin/mi/productos', searchLimiter);
 app.use('/api/admin/productos/import', importLimiter);

@@ -42,6 +42,8 @@ export default function App() {
     brand_name: 'InventaPro',
     brand_abbreviation: 'IP',
     brand_subtitle: 'Sistema de Conteo e Inventario',
+    brand_logo_url: '',
+    brand_favicon_url: '',
     brand_color_primary: '#1c4f82',
     brand_color_secondary: '#2864a3'
   });
@@ -75,15 +77,16 @@ export default function App() {
 
           // Actualizar favicon dinámicamente según iniciales y color de marca
           const abbr = data.branding.brand_abbreviation || 'IP';
+          const faviconUrl = String(data.branding.brand_favicon_url || '').trim();
           const favicon = document.querySelector('link[rel="icon"]');
           const svgHtml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="${encodeURIComponent(primary)}"/><text x="50" y="55" fill="white" font-size="52" font-weight="bold" font-family="sans-serif" dominant-baseline="middle" text-anchor="middle">${abbr}</text></svg>`;
           if (favicon) {
-            favicon.href = `data:image/svg+xml,${svgHtml}`;
+            favicon.href = faviconUrl || `data:image/svg+xml,${svgHtml}`;
           } else {
             const link = document.createElement('link');
             link.rel = 'icon';
-            link.type = 'image/svg+xml';
-            link.href = `data:image/svg+xml,${svgHtml}`;
+            link.type = faviconUrl ? 'image/png' : 'image/svg+xml';
+            link.href = faviconUrl || `data:image/svg+xml,${svgHtml}`;
             document.head.appendChild(link);
           }
         }

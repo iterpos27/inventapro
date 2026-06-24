@@ -136,6 +136,14 @@ Para migrar datos reales desde el PHP actual, exporta las tablas MySQL y cargala
 
 Los hashes de password PHP generados por `password_hash` se validan con `bcrypt`, por lo que se pueden conservar.
 
+Tambien existe un importador desde exportaciones JSON por tabla:
+
+```powershell
+npm run migrate:mysql --prefix backend -- --dry-run
+```
+
+La estructura esperada y sus opciones estan en `docs/mysql-json-migration.md`.
+
 ## Despliegue en Railway
 
 El repositorio esta preparado para desplegarse como un unico servicio: Express sirve la API y tambien el frontend compilado. El arranque ejecuta las migraciones pendientes y crea el administrador inicial solo si todavia no existe.

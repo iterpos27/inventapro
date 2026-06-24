@@ -4,16 +4,19 @@ import { X, Settings, ChevronDown } from 'lucide-react';
 export function Sidebar({ items, route, setRoute, open, setOpen, branding }) {
   const [adminOpen, setAdminOpen] = useState(false);
   const grouped = groupNav(items);
-  const { brand_name, brand_abbreviation, brand_subtitle } = branding || {
+  const { brand_name, brand_abbreviation, brand_subtitle, brand_logo_url } = branding || {
     brand_name: 'InventaPro',
     brand_abbreviation: 'IP',
-    brand_subtitle: 'Sistema de Conteo e Inventario'
+    brand_subtitle: 'Sistema de Conteo e Inventario',
+    brand_logo_url: ''
   };
   return (
     <>
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="brand">
-          <div className="brand-mark">{brand_abbreviation}</div>
+          <div className="brand-mark">
+            {brand_logo_url ? <img src={brand_logo_url} alt={brand_name || 'Logo'} /> : brand_abbreviation}
+          </div>
           <div>
             <strong>{brand_name}</strong>
             <span>{brand_subtitle}</span>

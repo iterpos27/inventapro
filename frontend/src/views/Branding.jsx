@@ -7,6 +7,8 @@ export function Branding({ request, branding, setBranding }) {
     brand_name: '',
     brand_abbreviation: '',
     brand_subtitle: '',
+    brand_logo_url: '',
+    brand_favicon_url: '',
     brand_color_primary: '',
     brand_color_secondary: ''
   });
@@ -20,6 +22,8 @@ export function Branding({ request, branding, setBranding }) {
         brand_name: branding.brand_name || '',
         brand_abbreviation: branding.brand_abbreviation || '',
         brand_subtitle: branding.brand_subtitle || '',
+        brand_logo_url: branding.brand_logo_url || '',
+        brand_favicon_url: branding.brand_favicon_url || '',
         brand_color_primary: branding.brand_color_primary || '#1c4f82',
         brand_color_secondary: branding.brand_color_secondary || '#2864a3'
       });
@@ -54,6 +58,8 @@ export function Branding({ request, branding, setBranding }) {
       brand_name: 'InventaPro',
       brand_abbreviation: 'IP',
       brand_subtitle: 'Sistema de Conteo e Inventario',
+      brand_logo_url: '',
+      brand_favicon_url: '',
       brand_color_primary: '#1c4f82',
       brand_color_secondary: '#2864a3'
     });
@@ -111,6 +117,26 @@ export function Branding({ request, branding, setBranding }) {
                 value={form.brand_subtitle}
                 onChange={(e) => setForm({ ...form, brand_subtitle: e.target.value })}
                 placeholder="Ej. Sistema de Inventario"
+              />
+            </label>
+
+            <label>
+              URL del logo
+              <input
+                type="url"
+                value={form.brand_logo_url}
+                onChange={(e) => setForm({ ...form, brand_logo_url: e.target.value })}
+                placeholder="https://..."
+              />
+            </label>
+
+            <label>
+              URL del favicon
+              <input
+                type="url"
+                value={form.brand_favicon_url}
+                onChange={(e) => setForm({ ...form, brand_favicon_url: e.target.value })}
+                placeholder="https://..."
               />
             </label>
 
@@ -172,7 +198,9 @@ export function Branding({ request, branding, setBranding }) {
             <div className="preview-element preview-sidebar" style={{ backgroundColor: form.brand_color_primary }}>
               <div className="preview-brand">
                 <div className="preview-logo-mark" style={{ backgroundColor: form.brand_color_secondary }}>
-                  {form.brand_abbreviation || 'IP'}
+                  {form.brand_logo_url
+                    ? <img src={form.brand_logo_url} alt={form.brand_name || 'Logo'} />
+                    : (form.brand_abbreviation || 'IP')}
                 </div>
                 <div className="preview-brand-info">
                   <strong>{form.brand_name || 'InventaPro'}</strong>

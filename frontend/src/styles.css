@@ -82,6 +82,14 @@ button {
   font-weight: 800;
 }
 
+.brand-mark img,
+.preview-logo-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
 .brand strong {
   font-size: 15px;
   line-height: 1.1;

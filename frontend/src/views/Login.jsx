@@ -8,10 +8,11 @@ export function Login({ onLogin, branding }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const { brand_name, brand_abbreviation, brand_subtitle } = branding || {
+  const { brand_name, brand_abbreviation, brand_subtitle, brand_logo_url } = branding || {
     brand_name: 'InventaPro',
     brand_abbreviation: 'IP',
-    brand_subtitle: 'Sistema de Conteo e Inventario'
+    brand_subtitle: 'Sistema de Conteo e Inventario',
+    brand_logo_url: ''
   };
 
   async function submit(event) {
@@ -32,7 +33,9 @@ export function Login({ onLogin, branding }) {
     <div className="login-screen">
       <form className="login-panel" onSubmit={submit}>
         <div className="brand large">
-          <div className="brand-mark">{brand_abbreviation}</div>
+          <div className="brand-mark">
+            {brand_logo_url ? <img src={brand_logo_url} alt={brand_name || 'Logo'} /> : brand_abbreviation}
+          </div>
           <div>
             <strong>{brand_name.toUpperCase()}</strong>
             <span>{brand_subtitle}</span>
