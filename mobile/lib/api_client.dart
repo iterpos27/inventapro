@@ -37,6 +37,12 @@ class ApiClient {
     return Uri.parse('$base$path').replace(queryParameters: query);
   }
 
+  Uri _publicUri(String path) {
+    final base = apiBaseUrl.replaceAll(RegExp(r'/+$'), '');
+    final root = base.replaceFirst(RegExp(r'/api(?:/v1)?$'), '');
+    return Uri.parse('$root$path');
+  }
+
   Map<String, String> _headers() {
     return {
       'Accept': 'application/json',
@@ -105,6 +111,21 @@ class ApiClient {
     return CountSession(
       token: token!,
       user: SessionUser.fromJson(data['user'] ?? {}),
+    );
+  }
+
+  Future<BrandingConfig> branding() async {
+    final response = await _send(
+      _http.get(
+        _publicUri('/api/admin/branding'),
+        headers: {'Accept': 'application/json'},
+      ),
+    );
+    final data = await _decode(response, handleUnauthorized: false);
+    return BrandingConfig.fromJson(
+      data['branding'] is Map<String, dynamic>
+          ? data['branding'] as Map<String, dynamic>
+          : const {},
     );
   }
 

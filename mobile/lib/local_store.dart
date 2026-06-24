@@ -10,7 +10,9 @@ class LocalStore {
   static const _tokenKey = 'session_token';
   static const _userKey = 'session_user';
   static const _apiBaseUrlKey = 'api_base_url';
+  static const _brandingKey = 'branding_config';
   static const _draftPrefix = 'draft_conteo_';
+  static const _syncPrefix = 'sync_conteo_';
   static const _searchPrefix = 'search_';
 
   Future<void> saveSession(CountSession session) async {
@@ -74,6 +76,18 @@ class LocalStore {
     return prefs.getString(_apiBaseUrlKey);
   }
 
+  Future<void> saveBranding(BrandingConfig branding) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_brandingKey, jsonEncode(branding.toJson()));
+  }
+
+  Future<BrandingConfig?> readBranding() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_brandingKey);
+    if (raw == null) return null;
+    return BrandingConfig.fromJson(Map<String, dynamic>.from(jsonDecode(raw)));
+  }
+
   Future<void> saveDraft(
     int conteoId,
     int version,
@@ -109,6 +123,23 @@ class LocalStore {
   Future<void> clearDraft(int conteoId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('$_draftPrefix$conteoId');
+  }
+
+  Future<void> saveSyncJob(SyncDraftJob job) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('$_syncPrefix${job.conteoId}', jsonEncode(job.toJson()));
+  }
+
+  Future<SyncDraftJob?> readSyncJob(int conteoId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('$_syncPrefix$conteoId');
+    if (raw == null) return null;
+    return SyncDraftJob.fromJson(Map<String, dynamic>.from(jsonDecode(raw)));
+  }
+
+  Future<void> clearSyncJob(int conteoId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('$_syncPrefix$conteoId');
   }
 
   Future<void> saveSearch(String term, List<Product> products) async {

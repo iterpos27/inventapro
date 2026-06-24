@@ -64,6 +64,7 @@ class _AppShellState extends State<AppShell> {
   late final ApiClient api;
   final store = LocalStore();
   CountSession? session;
+  BrandingConfig branding = BrandingConfig.fallback;
   String apiBaseUrl = AppConfig.defaultApiBaseUrl;
   bool loading = true;
 
@@ -90,7 +91,18 @@ class _AppShellState extends State<AppShell> {
       await store.saveApiBaseUrl(api.apiBaseUrl);
     }
     final saved = await store.readSession();
+    final savedBranding = await store.readBranding();
     api.token = saved?.token;
+    if (savedBranding != null) {
+      branding = savedBranding;
+    }
+    try {
+      final freshBranding = await api.branding();
+      branding = freshBranding;
+      await store.saveBranding(freshBranding);
+    } catch (_) {
+      // Mantener branding en cache cuando no hay red.
+    }
     setState(() {
       apiBaseUrl = api.apiBaseUrl;
       session = saved;
@@ -137,6 +149,7 @@ class _AppShellState extends State<AppShell> {
     if (session == null) {
       return LoginScreen(
         api: api,
+        branding: branding,
         apiBaseUrl: apiBaseUrl,
         onApiBaseUrlChanged: _saveApiBaseUrl,
         onLogin: _setSession,
@@ -146,6 +159,7 @@ class _AppShellState extends State<AppShell> {
       api: api,
       store: store,
       user: session!.user,
+      branding: branding,
       apiBaseUrl: apiBaseUrl,
       onApiBaseUrlChanged: _saveApiBaseUrl,
       onLogout: _logout,
@@ -157,12 +171,14 @@ class LoginScreen extends StatefulWidget {
   const LoginScreen({
     super.key,
     required this.api,
+    required this.branding,
     required this.apiBaseUrl,
     required this.onApiBaseUrlChanged,
     required this.onLogin,
   });
 
   final ApiClient api;
+  final BrandingConfig branding;
   final String apiBaseUrl;
   final Future<void> Function(String value) onApiBaseUrlChanged;
   final Future<void> Function(CountSession session) onLogin;
@@ -224,6 +240,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final branding = widget.branding;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -244,33 +261,51 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: _primary,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Center(
-                          child: Text(
-                            'IP',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
+                        child: branding.brandLogoUrl.trim().isNotEmpty
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  branding.brandLogoUrl.trim(),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, error, stackTrace) => Center(
+                                    child: Text(
+                                      branding.brandAbbreviation,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Center(
+                                child: Text(
+                                  branding.brandAbbreviation,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
                       ),
                     ),
                     const SizedBox(height: 22),
-                    const Text(
-                      'INVENTAPRO',
+                    Text(
+                      branding.brandName.toUpperCase(),
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: _blue,
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
-                      'Sistema de inventario',
+                    Text(
+                      branding.brandSubtitle,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: _blue,
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
@@ -363,6 +398,7 @@ class OperationHome extends StatefulWidget {
     required this.api,
     required this.store,
     required this.user,
+    required this.branding,
     required this.apiBaseUrl,
     required this.onApiBaseUrlChanged,
     required this.onLogout,
@@ -371,6 +407,7 @@ class OperationHome extends StatefulWidget {
   final ApiClient api;
   final LocalStore store;
   final SessionUser user;
+  final BrandingConfig branding;
   final String apiBaseUrl;
   final Future<void> Function(String value) onApiBaseUrlChanged;
   final Future<void> Function() onLogout;
@@ -397,6 +434,7 @@ class _OperationHomeState extends State<OperationHome>
   String saveStatus = 'Sin cambios recientes.';
   bool _hasUnsavedChanges = false;
   bool _syncScheduled = false;
+  SyncDraftJob? pendingSyncJob;
 
   @override
   void initState() {
@@ -458,15 +496,15 @@ class _OperationHomeState extends State<OperationHome>
           toma.conteoId ?? await widget.api.iniciarConteo(toma.tomaId);
       final detail = await widget.api.detalleConteo(conteoId, toma);
       final localDraft = await widget.store.readDraft(conteoId);
+      final syncJob = await widget.store.readSyncJob(conteoId);
       setState(() {
         conteo = detail.conteo.copyWith(version: localDraft?.version);
-        items = localDraft?.items ?? detail.items;
+        items = syncJob?.items ?? localDraft?.items ?? detail.items;
         results = [];
         searchCtrl.clear();
-        _hasUnsavedChanges = localDraft != null;
-        saveStatus = localDraft == null
-            ? 'Sin cambios recientes.'
-            : 'Borrador local pendiente de sincronizar.';
+        pendingSyncJob = syncJob;
+        _hasUnsavedChanges = localDraft != null || syncJob != null;
+        saveStatus = _resolveSyncStatus(syncJob, localDraft != null);
       });
       _startPeriodicAutoSave();
       _scheduleDraftSync();
@@ -640,6 +678,17 @@ class _OperationHomeState extends State<OperationHome>
       return;
     }
     await widget.store.saveDraft(current.id, current.version, items);
+    final job = SyncDraftJob(
+      conteoId: current.id,
+      version: current.version,
+      items: validItems,
+      status: 'pending',
+      updatedAt: DateTime.now().toIso8601String(),
+    );
+    await widget.store.saveSyncJob(job);
+    if (mounted) {
+      setState(() => pendingSyncJob = job);
+    }
   }
 
   void _startPeriodicAutoSave() {
@@ -698,8 +747,10 @@ class _OperationHomeState extends State<OperationHome>
         validItems,
       );
       await widget.store.clearDraft(current.id);
+      await widget.store.clearSyncJob(current.id);
       setState(() {
         conteo = current.copyWith(version: version);
+        pendingSyncJob = null;
         saveStatus = 'Borrador guardado.';
         _hasUnsavedChanges = false;
       });
@@ -708,10 +759,20 @@ class _OperationHomeState extends State<OperationHome>
       }
     } catch (err) {
       await _persistLocalDraft();
-      if (!mounted) return;
-      setState(
-        () => saveStatus = 'Borrador local guardado. Pendiente de sincronizar.',
+      final failedJob = SyncDraftJob(
+        conteoId: current.id,
+        version: current.version,
+        items: validItems,
+        status: 'error',
+        updatedAt: DateTime.now().toIso8601String(),
+        errorMessage: '$err',
       );
+      await widget.store.saveSyncJob(failedJob);
+      if (!mounted) return;
+      setState(() {
+        pendingSyncJob = failedJob;
+        saveStatus = 'Borrador local guardado. Pendiente de sincronizar.';
+      });
       if (!silent) {
         _toast('$err', isWarning: true);
       }
@@ -734,9 +795,11 @@ class _OperationHomeState extends State<OperationHome>
     try {
       await widget.api.finalizarConteo(current.id, current.version, validItems);
       await widget.store.clearDraft(current.id);
+      await widget.store.clearSyncJob(current.id);
       setState(() {
         conteo = null;
         items = [];
+        pendingSyncJob = null;
         saveStatus = 'Sin cambios recientes.';
         _hasUnsavedChanges = false;
       });
@@ -779,6 +842,16 @@ class _OperationHomeState extends State<OperationHome>
     return [cleanDate, cleanHour].where((part) => part.isNotEmpty).join(' ');
   }
 
+  String _resolveSyncStatus(SyncDraftJob? job, bool hasDraft) {
+    if (job?.status == 'error') {
+      return 'Borrador local con error de sincronizacion.';
+    }
+    if (job != null || hasDraft) {
+      return 'Borrador local pendiente de sincronizar.';
+    }
+    return 'Sin cambios recientes.';
+  }
+
   Future<void> _backToTomaList() async {
     await _persistLocalDraft();
     autoSaveTimer?.cancel();
@@ -812,7 +885,7 @@ class _OperationHomeState extends State<OperationHome>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              widget.user.nombre,
+              widget.branding.brandName,
               style: const TextStyle(
                 color: _blue,
                 fontSize: 11,
@@ -820,7 +893,7 @@ class _OperationHomeState extends State<OperationHome>
               ),
             ),
             Text(
-              current == null ? 'Conteo' : 'Conteo y Borradores',
+              current == null ? widget.user.nombre : 'Conteo y Borradores',
               style: const TextStyle(
                 color: _blue,
                 fontSize: 14,

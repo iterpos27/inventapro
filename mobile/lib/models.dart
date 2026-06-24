@@ -35,6 +35,56 @@ class CountSession {
   final SessionUser user;
 }
 
+class BrandingConfig {
+  const BrandingConfig({
+    required this.brandName,
+    required this.brandAbbreviation,
+    required this.brandSubtitle,
+    required this.brandLogoUrl,
+    required this.brandColorPrimary,
+    required this.brandColorSecondary,
+  });
+
+  final String brandName;
+  final String brandAbbreviation;
+  final String brandSubtitle;
+  final String brandLogoUrl;
+  final String brandColorPrimary;
+  final String brandColorSecondary;
+
+  static const fallback = BrandingConfig(
+    brandName: 'InventaPro',
+    brandAbbreviation: 'IP',
+    brandSubtitle: 'Sistema de Conteo e Inventario',
+    brandLogoUrl: '',
+    brandColorPrimary: '#003f7f',
+    brandColorSecondary: '#2364a5',
+  );
+
+  factory BrandingConfig.fromJson(Map<String, dynamic> json) {
+    return BrandingConfig(
+      brandName: '${json['brand_name'] ?? fallback.brandName}',
+      brandAbbreviation:
+          '${json['brand_abbreviation'] ?? fallback.brandAbbreviation}',
+      brandSubtitle: '${json['brand_subtitle'] ?? fallback.brandSubtitle}',
+      brandLogoUrl: '${json['brand_logo_url'] ?? ''}',
+      brandColorPrimary:
+          '${json['brand_color_primary'] ?? fallback.brandColorPrimary}',
+      brandColorSecondary:
+          '${json['brand_color_secondary'] ?? fallback.brandColorSecondary}',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'brand_name': brandName,
+    'brand_abbreviation': brandAbbreviation,
+    'brand_subtitle': brandSubtitle,
+    'brand_logo_url': brandLogoUrl,
+    'brand_color_primary': brandColorPrimary,
+    'brand_color_secondary': brandColorSecondary,
+  };
+}
+
 class Toma {
   const Toma({
     required this.tomaId,
@@ -217,5 +267,63 @@ class CountItem {
     'codigo': codigo,
     'descripcion': descripcion,
     'cantidad': cantidad,
+  };
+}
+
+class SyncDraftJob {
+  const SyncDraftJob({
+    required this.conteoId,
+    required this.version,
+    required this.items,
+    required this.status,
+    required this.updatedAt,
+    this.errorMessage = '',
+  });
+
+  final int conteoId;
+  final int version;
+  final List<CountItem> items;
+  final String status;
+  final String updatedAt;
+  final String errorMessage;
+
+  SyncDraftJob copyWith({
+    int? version,
+    List<CountItem>? items,
+    String? status,
+    String? updatedAt,
+    String? errorMessage,
+  }) {
+    return SyncDraftJob(
+      conteoId: conteoId,
+      version: version ?? this.version,
+      items: items ?? this.items,
+      status: status ?? this.status,
+      updatedAt: updatedAt ?? this.updatedAt,
+      errorMessage: errorMessage ?? this.errorMessage,
+    );
+  }
+
+  factory SyncDraftJob.fromJson(Map<String, dynamic> json) {
+    final list = json['items'] is List ? json['items'] as List : const [];
+    return SyncDraftJob(
+      conteoId: int.tryParse('${json['conteo_id'] ?? 0}') ?? 0,
+      version: int.tryParse('${json['version'] ?? 0}') ?? 0,
+      items: list
+          .map((item) => CountItem.fromJson(Map<String, dynamic>.from(item)))
+          .toList(),
+      status: '${json['status'] ?? 'pending'}',
+      updatedAt: '${json['updated_at'] ?? ''}',
+      errorMessage: '${json['error_message'] ?? ''}',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'conteo_id': conteoId,
+    'version': version,
+    'items': items.map((item) => item.toJson()).toList(),
+    'status': status,
+    'updated_at': updatedAt,
+    'error_message': errorMessage,
   };
 }
