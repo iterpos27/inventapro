@@ -370,7 +370,7 @@ export function MiConteo({ request, token }) {
                     <td>{item.lineas || 0}</td>
                     <td>{Number(item.unidades || 0).toFixed(2)}</td>
                     <td>{formatDateTime(item.fecha_finalizacion || item.fecha_inicio)}</td>
-                    <td>{item.estado === 'finalizado' ? <button className="edit-text-btn success" type="button" onClick={() => downloadFile(token, `/conteos/${item.id}/excel`).catch((err) => setError(err.message))}><Download size={14} />Descargar</button> : <span className="muted">Pendiente</span>}</td>
+                    <td>{item.estado === 'finalizado' && item.conteo_id ? <button className="edit-text-btn success" type="button" onClick={() => downloadFile(token, `/conteos/${item.conteo_id}/excel`).catch((err) => setError(err.message))}><Download size={14} />Descargar</button> : <span className="muted">Pendiente</span>}</td>
                   </tr>
                 ))}
                 {history.length === 0 ? <tr><td colSpan="7" className="empty-table">Todavia no hay conteos registrados.</td></tr> : null}

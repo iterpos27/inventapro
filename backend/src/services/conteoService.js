@@ -114,6 +114,44 @@ export async function closeExpiredTomas(db, tomaId = null) {
   }
 }
 
+export async function listUserCountHistory(db, usuarioId, limit = 30) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
+  const { rows } = await db.query(
+    `SELECT COALESCE(c.id, -tu.id) AS id,
+            c.id AS conteo_id,
+            tu.toma_id,
+            COALESCE(
+              c.estado::text,
+              CASE
+                WHEN t.estado = 'finalizada' THEN 'pendiente'
+                ELSE tu.estado::text
+              END
+            ) AS estado,
+            c.fecha_inicio,
+            c.fecha_finalizacion,
+            COALESCE(c.fecha_finalizacion, c.fecha_inicio, t.fecha_finalizacion, tu.fecha_asignacion) AS fecha_movimiento,
+            t.numero_toma, t.nombre_toma, t.agencia,
+            t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin,
+            COUNT(d.id)::int AS lineas,
+            COALESCE(SUM(d.cantidad), 0)::numeric AS unidades
+     FROM toma_usuarios tu
+     INNER JOIN tomas_fisicas t ON t.id = tu.toma_id
+     LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id
+     LEFT JOIN conteo_detalle d ON d.conteo_id = c.id
+     WHERE tu.usuario_id = $1
+       AND (
+         c.id IS NOT NULL
+         OR t.estado = 'finalizada'
+         OR tu.estado = 'finalizado'
+       )
+     GROUP BY tu.id, t.id, c.id
+     ORDER BY COALESCE(c.fecha_finalizacion, c.fecha_inicio, t.fecha_finalizacion, tu.fecha_asignacion) DESC
+     LIMIT $2`,
+    [usuarioId, safeLimit]
+  );
+  return rows;
+}
+
 export function validateTomaWindow(toma) {
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);

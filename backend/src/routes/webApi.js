@@ -19,6 +19,7 @@ import {
   bumpVersion,
   closeExpiredTomas,
   closeTomaIfComplete,
+  listUserCountHistory,
   refreshTomaSummary,
   replaceDetalle,
   validateTomaWindow
@@ -220,20 +221,7 @@ webApi.get('/mi/tomas', requireWebUser, requirePermission('count'), asyncHandler
 }));
 
 webApi.get('/mi/historial', requireWebUser, requirePermission('count'), asyncHandler(async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT c.id, c.estado, c.fecha_inicio, c.fecha_finalizacion,
-            t.numero_toma, t.nombre_toma, t.agencia,
-            COUNT(d.id)::int AS lineas,
-            COALESCE(SUM(d.cantidad), 0)::numeric AS unidades
-     FROM conteos c
-     LEFT JOIN tomas_fisicas t ON t.id = c.toma_id
-     LEFT JOIN conteo_detalle d ON d.conteo_id = c.id
-     WHERE c.usuario_id = $1
-     GROUP BY c.id, t.id
-     ORDER BY COALESCE(c.fecha_finalizacion, c.fecha_inicio) DESC
-     LIMIT 30`,
-    [req.user.id]
-  );
+  const rows = await listUserCountHistory(pool, req.user.id, 30);
   res.json({ ok: true, conteos: rows });
 }));
 
@@ -613,11 +601,14 @@ webApi.get('/tomas/:id', requireWebUser, requirePermission('reports'), asyncHand
 
 webApi.patch('/tomas/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
   const tomaId = Number(req.params.id || 0);
-  const fields = validateTomaPayload(req.body);
+  const fields = validateTomaPayload(req.body, { allowPastClosure: true });
   const result = await withTransaction(async (db) => {
-    const current = await db.query('SELECT numero_toma FROM tomas_fisicas WHERE id = $1 FOR UPDATE', [tomaId]);
+    const current = await db.query('SELECT numero_toma, estado FROM tomas_fisicas WHERE id = $1 FOR UPDATE', [tomaId]);
     if (!current.rows[0]) {
       throw new AppError('Toma no encontrada', 404);
+    }
+    if (current.rows[0].estado === 'abierta') {
+      assertClosureNotExpired(fields);
     }
     const nombreToma = buildTomaName(current.rows[0].numero_toma, fields);
     const { rows } = await db.query(
@@ -991,7 +982,29 @@ function validateTomaPayload(body, options = {}) {
     throw new AppError('Hora invalida', 422);
   }
 
-  return { agencia, fecha_habilitacion, fecha_cierre, hora_inicio, hora_fin };
+  const fields = { agencia, fecha_habilitacion, fecha_cierre, hora_inicio, hora_fin };
+  if (tomaEndDate(fields) < tomaStartDate(fields)) {
+    throw new AppError('La finalizacion no puede ser anterior a la habilitacion', 422);
+  }
+  if (!options.allowPastClosure) {
+    assertClosureNotExpired(fields);
+  }
+
+  return fields;
+}
+
+function assertClosureNotExpired(fields) {
+  if (tomaEndDate(fields) < new Date()) {
+    throw new AppError('La fecha y hora de finalizacion no puede estar vencida. Use "Cerrar toma" para cerrarla inmediatamente.', 422);
+  }
+}
+
+function tomaStartDate(fields) {
+  return new Date(`${fields.fecha_habilitacion}T${fields.hora_inicio}:00`);
+}
+
+function tomaEndDate(fields) {
+  return new Date(`${fields.fecha_cierre}T${fields.hora_fin}:00`);
 }
 
 async function nextTomaNumber(db, fechaHabilitacion) {

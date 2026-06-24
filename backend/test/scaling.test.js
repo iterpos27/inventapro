@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { closeExpiredTomas } from '../src/services/conteoService.js';
+import { closeExpiredTomas, listUserCountHistory } from '../src/services/conteoService.js';
 import { createRateLimiter } from '../src/middleware/rateLimit.js';
 
 test('closeExpiredTomas intenta adquirir el lock advisory y maneja la base correctamente', async () => {
@@ -74,6 +74,36 @@ test('closeExpiredTomas retorna inmediatamente si el advisory lock es denegado',
   assert.equal(beginCalled, true);
   assert.equal(rollbackCalled, true);
   assert.equal(queryCount, 3);
+});
+
+test('listUserCountHistory incluye asignaciones cerradas aunque no tengan conteo', async () => {
+  let capturedSql = '';
+  let capturedParams = [];
+  const mockDb = {
+    query: async (sql, params) => {
+      capturedSql = sql;
+      capturedParams = params;
+      return {
+        rows: [{
+          id: -7,
+          conteo_id: null,
+          estado: 'pendiente',
+          numero_toma: '2026-001',
+          lineas: 0,
+          unidades: '0'
+        }]
+      };
+    }
+  };
+
+  const rows = await listUserCountHistory(mockDb, 23, 30);
+
+  assert.equal(capturedParams[0], 23);
+  assert.equal(capturedParams[1], 30);
+  assert.match(capturedSql, /FROM toma_usuarios tu/);
+  assert.match(capturedSql, /OR t\.estado = 'finalizada'/);
+  assert.equal(rows[0].estado, 'pendiente');
+  assert.equal(rows[0].conteo_id, null);
 });
 
 test('rateLimiter en memoria restringe peticiones excedidas', async () => {
