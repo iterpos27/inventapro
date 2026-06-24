@@ -18,6 +18,7 @@ import { downloadFile } from '../services/api';
 import {
   formatPeriodDate,
   formatShortPeriod,
+  formatTomaTitle,
   composeDateTime,
   previewTomaNumber,
   formatDateTime
@@ -233,10 +234,10 @@ export function Tomas({ request, token }) {
         <section className="panel toma-summary-card">
           <div>
             <span className={`report-status ${selected.estado === 'finalizada' ? 'done' : 'open'}`}>{selected.estado}</span>
-            <p>TOMA FISICA # {selected.numero_toma}</p>
-            <p>AGENCIA: {selected.agencia || ''}</p>
-            <p>HABILITACION: {formatPeriodDate(selected.fecha_habilitacion, selected.hora_inicio)}</p>
-            <p>FINALIZACION: {formatPeriodDate(selected.fecha_cierre, selected.hora_fin)}</p>
+            <p>{formatTomaTitle(selected.numero_toma)}</p>
+            <p>{selected.agencia || '-'}</p>
+            <p>{formatPeriodDate(selected.fecha_habilitacion, selected.hora_inicio)}</p>
+            <p>{formatPeriodDate(selected.fecha_cierre, selected.hora_fin)}</p>
           </div>
           <aside>
             <strong>Creada por {selected.creado_por_nombre || 'Administrador'}</strong>
@@ -363,10 +364,10 @@ export function Tomas({ request, token }) {
               {items.map((item) => (
                 <tr key={item.id} className={selected?.id === item.id ? 'selected-row' : ''}>
                   <td>
-                    <strong>TOMA FISICA # {item.numero_toma}</strong>
-                    <span>AGENCIA: {item.agencia || ''}</span>
-                    <span>HABILITACION: {formatPeriodDate(item.fecha_habilitacion, item.hora_inicio)}</span>
-                    <span>FINALIZACION: {formatPeriodDate(item.fecha_cierre, item.hora_fin)}</span>
+                    <strong>{formatTomaTitle(item.numero_toma)}</strong>
+                    <span>{item.agencia || '-'}</span>
+                    <span>{formatPeriodDate(item.fecha_habilitacion, item.hora_inicio)}</span>
+                    <span>{formatPeriodDate(item.fecha_cierre, item.hora_fin)}</span>
                   </td>
                   <td>{item.usuarios_asignados || 0}</td>
                   <td>{item.usuarios_en_proceso || 0}</td>
@@ -574,10 +575,10 @@ export function TomaForm({ form, setForm, users, agencias = [], onSubmit, submit
       ) : null}
       {inline ? (
         <div className="toma-preview">
-          <strong>TOMA FISICA # {previewTomaNumber(form.fecha_habilitacion)}</strong>
-          <span>AGENCIA: {form.agencia || ''}</span>
-          <span>HABILITACION: {formatPeriodDate(form.fecha_habilitacion, form.hora_inicio)}</span>
-          <span>FINALIZACION: {formatPeriodDate(form.fecha_cierre, form.hora_fin)}</span>
+          <strong>{formatTomaTitle(previewTomaNumber(form.fecha_habilitacion))}</strong>
+          <span>{form.agencia || '-'}</span>
+          <span>{formatPeriodDate(form.fecha_habilitacion, form.hora_inicio)}</span>
+          <span>{formatPeriodDate(form.fecha_cierre, form.hora_fin)}</span>
         </div>
       ) : null}
       <div className="user-picker-heading">

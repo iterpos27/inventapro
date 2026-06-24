@@ -508,7 +508,7 @@ webApi.get('/tomas', requireWebUser, requirePermission('reports'), asyncHandler(
        GROUP BY toma_id
      ) p ON p.toma_id = t.id
      ORDER BY t.id DESC
-     LIMIT 100`
+     LIMIT 500`
   );
   res.json({ ok: true, tomas: rows });
 }));

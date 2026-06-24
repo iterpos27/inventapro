@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Box, FileText, PlusCircle } from 'lucide-react';
-import { formatDateTime, formatPeriodDate } from '../utils/helpers';
+import { formatDateTime, formatPeriodDate, formatTomaTitle } from '../utils/helpers';
 
 export function Dashboard({ request, setRoute }) {
   const [metrics, setMetrics] = useState(null);
@@ -169,13 +169,12 @@ function DonutCard({ title, percent, color, rows }) {
 }
 
 function TomaSummary({ toma }) {
-  const title = String(toma.nombre_toma || '').split(/\r?\n/)[0] || `TOMA FISICA # ${toma.numero_toma || ''}`;
   return (
     <div className="dashboard-toma-summary">
-      <strong>{title.toUpperCase()}</strong>
-      <span>AGENCIA: {String(toma.agencia || '').toUpperCase() || '-'}</span>
-      <span>HABILITACION: {formatPeriodDate(toma.fecha_habilitacion, toma.hora_inicio)}</span>
-      <span>FINALIZACION: {formatPeriodDate(toma.fecha_cierre, toma.hora_fin)}</span>
+      <strong>{formatTomaTitle(toma.numero_toma)}</strong>
+      <span>{String(toma.agencia || '').toUpperCase() || '-'}</span>
+      <span>{formatPeriodDate(toma.fecha_habilitacion, toma.hora_inicio)}</span>
+      <span>{formatPeriodDate(toma.fecha_cierre, toma.hora_fin)}</span>
     </div>
   );
 }

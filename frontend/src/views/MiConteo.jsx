@@ -72,9 +72,8 @@ function tomaPeriodLabel(toma, field) {
 
 function tomaTitle(numeroToma) {
   const value = String(numeroToma || '').trim();
-  if (!value) return 'TOMA FISICA #';
-  if (/^TOMA\s+FISICA\s+#/i.test(value)) return value.toUpperCase();
-  return `TOMA FISICA # ${value}`.toUpperCase();
+  if (!value) return '#';
+  return value.replace(/^TOMA\s+FISICA\s+#\s*/i, '# ').replace(/^#?\s*/, '# ').toUpperCase();
 }
 
 function savedSnapshot(items) {
@@ -392,9 +391,9 @@ export function MiConteo({ request, token }) {
               <strong className="operation-title">{tomaTitle(conteo.numero_toma)}</strong>
               <span className="save-status">{saveStatus}</span>
               <div className="operation-meta">
-                <span><Building2 size={14} /> Agencia: {conteo.agencia || ''}</span>
-                <span><Calendar size={14} /> Habilitacion: {tomaPeriodLabel(conteo, 'habilitacion')}</span>
-                <span><Calendar size={14} /> Cierre: {tomaPeriodLabel(conteo, 'cierre')}</span>
+                <span><Building2 size={14} /> {conteo.agencia || '-'}</span>
+                <span><Calendar size={14} /> {tomaPeriodLabel(conteo, 'habilitacion')}</span>
+                <span><Calendar size={14} /> {tomaPeriodLabel(conteo, 'cierre')}</span>
               </div>
             </div>
             <div className="operation-actions">

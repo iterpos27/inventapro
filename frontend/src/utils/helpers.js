@@ -40,6 +40,11 @@ export function previewTomaNumber(date) {
   return `${year}-000`;
 }
 
+export function formatTomaTitle(numeroToma) {
+  const value = String(numeroToma || '').trim();
+  return value ? `# ${value}` : '#';
+}
+
 export function formatPeriodDate(date, time) {
   if (!date && !time) return '';
   const dateOnly = String(date || '1970-01-01').slice(0, 10);

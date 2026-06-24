@@ -6,16 +6,17 @@ import { downloadFile } from '../services/api';
 import {
   formatDateTime,
   formatDateOnly,
+  formatTomaTitle,
   formatPeriodDate,
   defaultReportRange,
   isWithinRange,
-  buildDailyReport,
-  buildTomaReport
+  buildDailyReport
 } from '../utils/helpers';
 import { TomaForm, defaultTomaForm } from './Tomas';
 
 export function Conteos({ request, token, user }) {
   const [items, setItems] = useState([]);
+  const [tomas, setTomas] = useState([]);
   const [users, setUsers] = useState([]);
   const [agencias, setAgencias] = useState([]);
   const [from, setFrom] = useState(defaultReportRange().from);
@@ -31,23 +32,33 @@ export function Conteos({ request, token, user }) {
   const isAdmin = user?.rol === 'admin';
 
   useEffect(() => {
-    request('/conteos').then((data) => setItems(data.conteos));
+    refreshReports();
     if (isAdmin) {
       request('/usuarios').then((data) => setUsers(data.usuarios.filter((item) => ['usuario', 'operador'].includes(item.rol) && item.estado))).catch(() => {});
       request('/agencias').then((data) => setAgencias((data.agencias || []).filter((a) => a.estado))).catch(() => {});
     }
-  }, [isAdmin, request]);
+  }, [isAdmin]);
 
   const filtered = useMemo(() => items.filter((item) => {
     const inRange = isWithinRange(item.fecha_inicio || item.fecha_finalizacion, from, to);
-    return inRange && (status === 'todos' || item.estado === status);
+    const statusMatch = status === 'todos'
+      || (status === 'finalizada' ? item.estado === 'finalizado' : item.estado !== 'finalizado');
+    return inRange && statusMatch;
   }), [from, items, status, to]);
   const dailyRows = useMemo(() => buildDailyReport(filtered), [filtered]);
-  const tomaRows = useMemo(() => buildTomaReport(items).filter((row) => status === 'todos' || (status === 'finalizado' ? row.status === 'done' : row.status === 'open')), [items, status]);
+  const tomaRows = useMemo(() => tomas.filter((item) => {
+    const date = item.fecha_finalizacion || item.fecha_cierre || item.fecha_creacion;
+    const inRange = isWithinRange(date, from, to);
+    return inRange && (status === 'todos' || item.estado === status);
+  }), [from, tomas, status, to]);
 
   async function refreshReports() {
-    const data = await request('/conteos');
-    setItems(data.conteos);
+    const [conteosData, tomasData] = await Promise.all([
+      request('/conteos'),
+      request('/tomas')
+    ]);
+    setItems(conteosData.conteos || []);
+    setTomas(tomasData.tomas || []);
   }
 
   async function openDetail(id) {
@@ -205,10 +216,10 @@ export function Conteos({ request, token, user }) {
         <section className="panel toma-summary-card">
           <div>
             <span className={`report-status ${selected.estado === 'finalizada' ? 'done' : 'open'}`}>{selected.estado}</span>
-            <p>TOMA FISICA # {selected.numero_toma}</p>
-            <p>AGENCIA: {selected.agencia || ''}</p>
-            <p>HABILITACION: {formatPeriodDate(selected.fecha_habilitacion, selected.hora_inicio)}</p>
-            <p>FINALIZACION: {formatPeriodDate(selected.fecha_cierre, selected.hora_fin)}</p>
+            <p>{formatTomaTitle(selected.numero_toma)}</p>
+            <p>{selected.agencia || '-'}</p>
+            <p>{formatPeriodDate(selected.fecha_habilitacion, selected.hora_inicio)}</p>
+            <p>{formatPeriodDate(selected.fecha_cierre, selected.hora_fin)}</p>
           </div>
           <aside>
             <strong>Creada por {selected.creado_por_nombre || 'Administrador'}</strong>
@@ -328,8 +339,8 @@ export function Conteos({ request, token, user }) {
             Estado
             <select value={status} onChange={(event) => setStatus(event.target.value)}>
               <option value="todos">Todos</option>
-              <option value="borrador">Borradores</option>
-              <option value="finalizado">Finalizados</option>
+              <option value="abierta">Abiertas</option>
+              <option value="finalizada">Finalizadas</option>
             </select>
           </label>
           <button className="primary" type="button" onClick={refreshReports}>
@@ -366,17 +377,17 @@ export function Conteos({ request, token, user }) {
       </section>
 
       <section className="panel users-card report-card">
-        <h3>Exportaciones por toma fisica</h3>
+        <h3>Tomas</h3>
         <div className="table-wrap">
           <table className="admin-table users-table report-table export-table">
             <thead>
               <tr>
-                <th>Toma fisica</th>
+                <th>Toma</th>
                 <th>Estado</th>
                 <th>Usuarios</th>
                 <th>Finalizados</th>
                 <th>Fin</th>
-                <th>Excel</th>
+                <th>Consolidado</th>
                 <th></th>
               </tr>
             </thead>
@@ -384,17 +395,17 @@ export function Conteos({ request, token, user }) {
               {tomaRows.map((row) => (
                 <tr key={row.id}>
                   <td>
-                    <strong>TOMA FISICA # {row.numero_toma || '-'}</strong>
-                    <span>AGENCIA: {row.agencia || ''}</span>
-                    <span>{row.nombre_toma}</span>
+                    <strong>{formatTomaTitle(row.numero_toma)}</strong>
+                    <span>{row.agencia || '-'}</span>
+                    <span>{formatPeriodDate(row.fecha_habilitacion, row.hora_inicio)} - {formatPeriodDate(row.fecha_cierre, row.hora_fin)}</span>
                   </td>
-                  <td><span className={`report-status ${row.status}`}>{row.statusLabel}</span></td>
-                  <td>{row.total}</td>
-                  <td>{row.finished}</td>
-                  <td>{formatDateTime(row.finishedAt)}</td>
+                  <td><span className={`report-status ${row.estado === 'finalizada' ? 'done' : 'open'}`}>{row.estado}</span></td>
+                  <td>{row.usuarios_asignados || 0}</td>
+                  <td>{row.usuarios_finalizados || 0}</td>
+                  <td>{formatDateTime(row.fecha_finalizacion || row.fecha_cierre)}</td>
                   <td>
-                    {row.excelId ? (
-                      <button className="edit-text-btn success" type="button" onClick={() => downloadFile(token, `/conteos/${row.excelId}/excel`)}>
+                    {Number(row.usuarios_finalizados || 0) > 0 ? (
+                      <button className="edit-text-btn success" type="button" onClick={() => consolidado(row)}>
                         <Download size={14} />
                         Descargar
                       </button>
@@ -414,7 +425,7 @@ export function Conteos({ request, token, user }) {
               ))}
               {tomaRows.length === 0 ? (
                 <tr>
-                  <td className="empty-table" colSpan="7">No hay tomas fisicas para exportar.</td>
+                  <td className="empty-table" colSpan="7">No hay tomas para el rango seleccionado.</td>
                 </tr>
               ) : null}
             </tbody>
