@@ -774,6 +774,157 @@ webApi.get('/conteos', requireWebUser, requirePermission('reports'), asyncHandle
   res.json({ ok: true, conteos: rows });
 }));
 
+webApi.get('/reportes/resumen', requireWebUser, requirePermission('reports'), asyncHandler(async (req, res) => {
+  const from = String(req.query.from || '').trim();
+  const to = String(req.query.to || '').trim();
+  const params = [];
+  const tomaFilters = [];
+  const userFilters = [];
+
+  if (from && isIsoDate(from)) {
+    params.push(from);
+    tomaFilters.push(`COALESCE(t.fecha_finalizacion::date, t.fecha_cierre, t.fecha_habilitacion) >= $${params.length}`);
+    userFilters.push(`COALESCE(c.fecha_finalizacion::date, c.fecha_inicio::date, t.fecha_finalizacion::date, t.fecha_cierre, t.fecha_habilitacion) >= $${params.length}`);
+  }
+  if (to && isIsoDate(to)) {
+    params.push(to);
+    tomaFilters.push(`COALESCE(t.fecha_finalizacion::date, t.fecha_cierre, t.fecha_habilitacion) <= $${params.length}`);
+    userFilters.push(`COALESCE(c.fecha_finalizacion::date, c.fecha_inicio::date, t.fecha_finalizacion::date, t.fecha_cierre, t.fecha_habilitacion) <= $${params.length}`);
+  }
+
+  const tomaWhere = tomaFilters.length ? `WHERE ${tomaFilters.join(' AND ')}` : '';
+  const userWhere = userFilters.length ? `WHERE ${userFilters.join(' AND ')}` : '';
+
+  const [agencias, usuarios] = await Promise.all([
+    pool.query(
+      `SELECT COALESCE(NULLIF(t.agencia, ''), 'SIN AGENCIA') AS agencia,
+              COUNT(*)::int AS tomas,
+              COUNT(*) FILTER (WHERE t.estado = 'abierta')::int AS abiertas,
+              COUNT(*) FILTER (WHERE t.estado = 'finalizada')::int AS finalizadas,
+              COALESCE(SUM(r.usuarios_asignados), 0)::int AS asignados,
+              COALESCE(SUM(r.usuarios_finalizados), 0)::int AS finalizados_usuarios,
+              COALESCE(SUM(r.usuarios_asignados - r.usuarios_finalizados), 0)::int AS pendientes,
+              COALESCE(SUM(r.unidades_contadas), 0)::numeric AS unidades
+       FROM tomas_fisicas t
+       LEFT JOIN toma_resumen r ON r.toma_id = t.id
+       ${tomaWhere}
+       GROUP BY COALESCE(NULLIF(t.agencia, ''), 'SIN AGENCIA')
+       ORDER BY agencia`,
+      params
+    ),
+    pool.query(
+      `SELECT u.id,
+              u.nombre,
+              u.usuario,
+              COUNT(DISTINCT tu.toma_id)::int AS tomas_asignadas,
+              COUNT(DISTINCT tu.toma_id) FILTER (WHERE tu.estado = 'finalizado')::int AS tomas_finalizadas,
+              COUNT(DISTINCT tu.toma_id) FILTER (WHERE tu.estado != 'finalizado')::int AS tomas_pendientes,
+              COUNT(DISTINCT c.id)::int AS conteos_creados,
+              COUNT(DISTINCT d.id)::int AS lineas,
+              COALESCE(SUM(d.cantidad), 0)::numeric AS unidades
+       FROM usuarios u
+       LEFT JOIN toma_usuarios tu ON tu.usuario_id = u.id
+       LEFT JOIN tomas_fisicas t ON t.id = tu.toma_id
+       LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id
+       LEFT JOIN conteo_detalle d ON d.conteo_id = c.id
+       WHERE u.rol IN ('usuario', 'operador') AND u.estado = TRUE
+         ${userWhere ? `AND ${userFilters.join(' AND ')}` : ''}
+       GROUP BY u.id, u.nombre, u.usuario
+       ORDER BY u.nombre`,
+      params
+    )
+  ]);
+
+  res.json({ ok: true, agencias: agencias.rows, usuarios: usuarios.rows });
+}));
+
+webApi.get('/sistema/eventos', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const from = String(req.query.from || '').trim();
+  const to = String(req.query.to || '').trim();
+  const kind = String(req.query.kind || 'todos').trim();
+  const params = [];
+  const logFilters = [];
+  const auditFilters = [];
+
+  if (from && isIsoDate(from)) {
+    params.push(from);
+    logFilters.push(`l.created_at::date >= $${params.length}`);
+    auditFilters.push(`a.created_at::date >= $${params.length}`);
+  }
+  if (to && isIsoDate(to)) {
+    params.push(to);
+    logFilters.push(`l.created_at::date <= $${params.length}`);
+    auditFilters.push(`a.created_at::date <= $${params.length}`);
+  }
+
+  const appQuery = kind === 'audit'
+    ? Promise.resolve({ rows: [] })
+    : pool.query(
+      `SELECT l.id,
+              'app' AS source,
+              l.level::text AS level,
+              l.event,
+              l.message,
+              l.context,
+              l.ip,
+              l.created_at,
+              NULL::text AS action,
+              NULL::text AS entity,
+              NULL::bigint AS entity_id,
+              u.nombre AS usuario_nombre
+       FROM app_logs l
+       LEFT JOIN usuarios u ON u.id = l.usuario_id
+       ${logFilters.length ? `WHERE ${logFilters.join(' AND ')}` : ''}
+       ORDER BY l.created_at DESC
+       LIMIT 100`,
+      params
+    );
+
+  const auditQuery = kind === 'app'
+    ? Promise.resolve({ rows: [] })
+    : pool.query(
+      `SELECT a.id,
+              'audit' AS source,
+              'info' AS level,
+              a.action AS event,
+              COALESCE(a.entity, 'sistema') AS message,
+              a.details AS context,
+              a.ip,
+              a.created_at,
+              a.action,
+              a.entity,
+              a.entity_id,
+              u.nombre AS usuario_nombre
+       FROM audit_logs a
+       LEFT JOIN usuarios u ON u.id = a.usuario_id
+       ${auditFilters.length ? `WHERE ${auditFilters.join(' AND ')}` : ''}
+       ORDER BY a.created_at DESC
+       LIMIT 100`,
+      params
+    );
+
+  const sessionsQuery = pool.query(
+    `SELECT u.nombre,
+            u.usuario,
+            COUNT(*)::int AS sesiones_activas,
+            MAX(t.fecha_expiracion) AS expira_ultima
+     FROM api_tokens t
+     INNER JOIN usuarios u ON u.id = t.usuario_id
+     WHERE t.revocado = FALSE
+       AND t.fecha_expiracion > NOW()
+     GROUP BY u.id, u.nombre, u.usuario
+     ORDER BY sesiones_activas DESC, u.nombre
+     LIMIT 20`
+  );
+
+  const [appLogs, auditLogs, sessions] = await Promise.all([appQuery, auditQuery, sessionsQuery]);
+  const events = [...appLogs.rows, ...auditLogs.rows]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 150);
+
+  res.json({ ok: true, events, sessions: sessions.rows });
+}));
+
 webApi.get('/conteos/:id/excel', requireWebUser, asyncHandler(async (req, res) => {
   const conteoId = Number(req.params.id || 0);
   if (conteoId <= 0) {

@@ -17,6 +17,7 @@ import { Agencias } from './views/Agencias';
 import { Usuarios } from './views/Usuarios';
 import { Tomas } from './views/Tomas';
 import { Branding } from './views/Branding';
+import { Auditoria } from './views/Auditoria';
 
 function readStoredUser() {
   try {
@@ -179,7 +180,8 @@ export default function App() {
     conteos: Conteos,
     agencias: Agencias,
     usuarios: Usuarios,
-    branding: Branding
+    branding: Branding,
+    auditoria: Auditoria
   }[route] || ({ conteo_borradores: MiConteo, dashboard: Dashboard }[defaultRoute]);
 
   return (

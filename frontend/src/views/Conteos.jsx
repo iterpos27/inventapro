@@ -16,6 +16,7 @@ import { TomaForm, defaultTomaForm } from './Tomas';
 export function Conteos({ request, token, user }) {
   const [items, setItems] = useState([]);
   const [tomas, setTomas] = useState([]);
+  const [summary, setSummary] = useState({ agencias: [], usuarios: [] });
   const [users, setUsers] = useState([]);
   const [agencias, setAgencias] = useState([]);
   const [from, setFrom] = useState(defaultReportRange().from);
@@ -52,12 +53,17 @@ export function Conteos({ request, token, user }) {
   }), [from, tomas, status, to]);
 
   async function refreshReports() {
-    const [conteosData, tomasData] = await Promise.all([
+    const [conteosData, tomasData, summaryData] = await Promise.all([
       request('/conteos'),
-      request('/tomas')
+      request('/tomas'),
+      request(`/reportes/resumen?${new URLSearchParams({ from, to }).toString()}`)
     ]);
     setItems(conteosData.conteos || []);
     setTomas(tomasData.tomas || []);
+    setSummary({
+      agencias: summaryData.agencias || [],
+      usuarios: summaryData.usuarios || []
+    });
   }
 
   async function openDetail(id) {
@@ -426,6 +432,85 @@ export function Conteos({ request, token, user }) {
               {tomaRows.length === 0 ? (
                 <tr>
                   <td className="empty-table" colSpan="7">No hay tomas para el rango seleccionado.</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel users-card report-card">
+        <h3>Avance por agencia</h3>
+        <div className="table-wrap">
+          <table className="admin-table users-table report-table">
+            <thead>
+              <tr>
+                <th>Agencia</th>
+                <th>Tomas</th>
+                <th>Abiertas</th>
+                <th>Finalizadas</th>
+                <th>Asignados</th>
+                <th>Finalizados</th>
+                <th>Pendientes</th>
+                <th>Unidades</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.agencias.map((row) => (
+                <tr key={row.agencia}>
+                  <td><strong>{row.agencia}</strong></td>
+                  <td>{row.tomas}</td>
+                  <td>{row.abiertas}</td>
+                  <td>{row.finalizadas}</td>
+                  <td>{row.asignados}</td>
+                  <td>{row.finalizados_usuarios}</td>
+                  <td>{row.pendientes}</td>
+                  <td>{Number(row.unidades || 0).toFixed(2)}</td>
+                </tr>
+              ))}
+              {summary.agencias.length === 0 ? (
+                <tr>
+                  <td className="empty-table" colSpan="8">No hay datos por agencia para el rango seleccionado.</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel users-card report-card">
+        <h3>Productividad por usuario</h3>
+        <div className="table-wrap">
+          <table className="admin-table users-table report-table">
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Tomas asignadas</th>
+                <th>Finalizadas</th>
+                <th>Pendientes</th>
+                <th>Conteos</th>
+                <th>Lineas</th>
+                <th>Unidades</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.usuarios.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <strong>{row.nombre}</strong>
+                    <span>{row.usuario}</span>
+                  </td>
+                  <td>{row.tomas_asignadas}</td>
+                  <td>{row.tomas_finalizadas}</td>
+                  <td>{row.tomas_pendientes}</td>
+                  <td>{row.conteos_creados}</td>
+                  <td>{row.lineas}</td>
+                  <td>{Number(row.unidades || 0).toFixed(2)}</td>
+                </tr>
+              ))}
+              {summary.usuarios.length === 0 ? (
+                <tr>
+                  <td className="empty-table" colSpan="7">No hay datos por usuario para el rango seleccionado.</td>
                 </tr>
               ) : null}
             </tbody>

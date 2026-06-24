@@ -5,7 +5,8 @@ import {
   Boxes,
   Users,
   Building2,
-  Palette
+  Palette,
+  ShieldAlert
 } from 'lucide-react';
 
 export const nav = [
@@ -15,7 +16,8 @@ export const nav = [
   { id: 'productos', label: 'Productos', icon: Boxes, group: 'main' },
   { id: 'usuarios', label: 'Usuarios', icon: Users, group: 'Administracion' },
   { id: 'agencias', label: 'Agencias', icon: Building2, group: 'Administracion' },
-  { id: 'branding', label: 'Personalizacion', icon: Palette, group: 'Administracion' }
+  { id: 'branding', label: 'Personalizacion', icon: Palette, group: 'Administracion' },
+  { id: 'auditoria', label: 'Auditoria', icon: ShieldAlert, group: 'Administracion' }
 ];
 
 export function navForUser(user) {
