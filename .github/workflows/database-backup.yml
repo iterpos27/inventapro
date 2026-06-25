@@ -10,16 +10,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-
-      - name: Validate secrets
+      - name: Check backup configuration
+        id: config
         env:
           DATABASE_PUBLIC_URL: ${{ secrets.DATABASE_PUBLIC_URL }}
           BACKUP_ENCRYPTION_PASSWORD: ${{ secrets.BACKUP_ENCRYPTION_PASSWORD }}
-        run: test -n "$DATABASE_PUBLIC_URL" && test -n "$BACKUP_ENCRYPTION_PASSWORD"
+        run: |
+          if [ -n "$DATABASE_PUBLIC_URL" ] && [ -n "$BACKUP_ENCRYPTION_PASSWORD" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "Backup configuration detected."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Backup skipped: missing DATABASE_PUBLIC_URL or BACKUP_ENCRYPTION_PASSWORD."
+          fi
+
+      - name: Install PostgreSQL client
+        if: steps.config.outputs.enabled == 'true'
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: Create encrypted backup
+        if: steps.config.outputs.enabled == 'true'
         env:
           DATABASE_PUBLIC_URL: ${{ secrets.DATABASE_PUBLIC_URL }}
           BACKUP_ENCRYPTION_PASSWORD: ${{ secrets.BACKUP_ENCRYPTION_PASSWORD }}
@@ -29,6 +39,7 @@ jobs:
           rm inventapro.dump
 
       - name: Upload encrypted backup
+        if: steps.config.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: inventapro-postgresql-${{ github.run_id }}

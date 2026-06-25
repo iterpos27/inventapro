@@ -1,6 +1,7 @@
 # Respaldo y restauracion de PostgreSQL
 
 El workflow `PostgreSQL Backup` genera cada dia un `pg_dump` cifrado y permite ejecucion manual desde GitHub Actions.
+Si los secretos no estan configurados, el workflow ahora se omite de forma segura y no debe fallar.
 
 ## Configuracion inicial
 
@@ -10,6 +11,14 @@ Agrega estos secretos en GitHub, en `Settings > Secrets and variables > Actions`
 - `BACKUP_ENCRYPTION_PASSWORD`: clave larga y exclusiva para cifrar los respaldos.
 
 Conserva la clave de cifrado fuera de GitHub. Los artefactos se retienen 14 dias y no contienen una copia sin cifrar.
+
+## Comportamiento sin configuracion
+
+Si todavia no agregas los secretos:
+
+- no se sube ningun respaldo al repositorio;
+- no se genera ningun artefacto;
+- el workflow termina en modo omitido, sin intentar conectarse a Railway.
 
 ## Restauracion
 
