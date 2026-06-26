@@ -127,7 +127,10 @@ class LocalStore {
 
   Future<void> saveSyncJob(SyncDraftJob job) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('$_syncPrefix${job.conteoId}', jsonEncode(job.toJson()));
+    await prefs.setString(
+      '$_syncPrefix${job.conteoId}',
+      jsonEncode(job.toJson()),
+    );
   }
 
   Future<SyncDraftJob?> readSyncJob(int conteoId) async {

@@ -117,16 +117,17 @@ void main() {
   test('branding publico se obtiene desde el mismo host', () async {
     final client = ApiClient(
       apiBaseUrl: 'https://inventapro.up.railway.app/api/v1',
-      httpClient: MockClient(
-        (request) async {
-          expect(request.url.toString(), 'https://inventapro.up.railway.app/api/admin/branding');
-          return http.Response(
-            '{"ok":true,"branding":{"brand_name":"Essart","brand_abbreviation":"ES","brand_subtitle":"Inventario","brand_logo_url":"","brand_color_primary":"#112233","brand_color_secondary":"#445566"}}',
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        },
-      ),
+      httpClient: MockClient((request) async {
+        expect(
+          request.url.toString(),
+          'https://inventapro.up.railway.app/api/admin/branding',
+        );
+        return http.Response(
+          '{"ok":true,"branding":{"brand_name":"Essart","brand_abbreviation":"ES","brand_subtitle":"Inventario","brand_logo_url":"","brand_color_primary":"#112233","brand_color_secondary":"#445566"}}',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
     );
 
     final branding = await client.branding();
