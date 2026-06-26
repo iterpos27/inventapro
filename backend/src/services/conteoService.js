@@ -218,37 +218,79 @@ export async function replaceDetalle(db, conteoId, items) {
 }
 
 export async function upsertDetalle(db, conteoId, upsert = [], remove = []) {
-  let lineas = 0;
-  for (const item of remove) {
-    const productoId = Number(item.producto_id || item.id || 0);
-    if (productoId > 0) {
-      await db.query('DELETE FROM conteo_detalle WHERE conteo_id = $1 AND producto_id = $2', [conteoId, productoId]);
-    }
+  const removeIds = [...new Set(
+    remove
+      .map((item) => Number(item.producto_id || item.id || 0))
+      .filter((productoId) => productoId > 0)
+  )];
+
+  if (removeIds.length) {
+    await db.query(
+      'DELETE FROM conteo_detalle WHERE conteo_id = $1 AND producto_id = ANY($2::bigint[])',
+      [conteoId, removeIds]
+    );
   }
 
-  for (const item of upsert) {
+  const normalized = normalizeDetalleItems(upsert);
+  if (!normalized.length) {
+    return 0;
+  }
+
+  const productIds = normalized.map((item) => item.productoId);
+  const products = await db.query(
+    'SELECT id, codigo, descripcion FROM productos WHERE estado = TRUE AND id = ANY($1::bigint[])',
+    [productIds]
+  );
+  const productMap = new Map(
+    products.rows.map((row) => [
+      Number(row.id),
+      { codigo: row.codigo, descripcion: row.descripcion }
+    ])
+  );
+
+  const validItems = normalized.filter((item) => productMap.has(item.productoId));
+  if (!validItems.length) {
+    return 0;
+  }
+
+  const conteoIds = validItems.map(() => conteoId);
+  const productoIds = validItems.map((item) => item.productoId);
+  const codigos = validItems.map((item) => productMap.get(item.productoId).codigo);
+  const descripciones = validItems.map((item) => productMap.get(item.productoId).descripcion);
+  const cantidades = validItems.map((item) => item.cantidad);
+
+  await db.query(
+    `INSERT INTO conteo_detalle (conteo_id, producto_id, codigo, descripcion, cantidad)
+     SELECT *
+     FROM UNNEST(
+       $1::bigint[],
+       $2::bigint[],
+       $3::text[],
+       $4::text[],
+       $5::numeric[]
+     )
+     ON CONFLICT (conteo_id, producto_id)
+     DO UPDATE SET
+       cantidad = EXCLUDED.cantidad,
+       codigo = EXCLUDED.codigo,
+       descripcion = EXCLUDED.descripcion`,
+    [conteoIds, productoIds, codigos, descripciones, cantidades]
+  );
+
+  return validItems.length;
+}
+
+function normalizeDetalleItems(items) {
+  const deduped = new Map();
+  for (const item of Array.isArray(items) ? items : []) {
     const productoId = Number(item.producto_id || item.id || 0);
     const cantidad = Number(item.cantidad || 0);
     if (productoId <= 0 || cantidad <= 0) {
       continue;
     }
-    const product = await db.query(
-      'SELECT id, codigo, descripcion FROM productos WHERE id = $1 AND estado = TRUE LIMIT 1',
-      [productoId]
-    );
-    if (!product.rows[0]) {
-      continue;
-    }
-    await db.query(
-      `INSERT INTO conteo_detalle (conteo_id, producto_id, codigo, descripcion, cantidad)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (conteo_id, producto_id)
-       DO UPDATE SET cantidad = EXCLUDED.cantidad, codigo = EXCLUDED.codigo, descripcion = EXCLUDED.descripcion`,
-      [conteoId, productoId, product.rows[0].codigo, product.rows[0].descripcion, cantidad]
-    );
-    lineas += 1;
+    deduped.set(productoId, { productoId, cantidad });
   }
-  return lineas;
+  return [...deduped.values()];
 }
 
 export async function bumpVersion(db, conteoId) {

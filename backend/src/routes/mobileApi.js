@@ -183,14 +183,44 @@ mobileApi.get('/productos', requireApiUser, asyncHandler(async (req, res) => {
     res.json({ ok: true, productos: [] });
     return;
   }
-  const { rows } = await pool.query(
-    `SELECT id, codigo, descripcion
-     FROM productos
-     WHERE estado = TRUE AND (codigo ILIKE $1 OR descripcion ILIKE $2)
-     ORDER BY CASE WHEN codigo = $3 THEN 0 ELSE 1 END, descripcion, codigo
-     LIMIT 30`,
-    [`${q}%`, `%${q}%`, q]
-  );
+
+  const codePrefix = `${escapeLike(q)}%`;
+  const contains = `%${escapeLike(q)}%`;
+  let rows = [];
+
+  if (/^\d+$/.test(q)) {
+    const exact = await pool.query(
+      `SELECT id, codigo, descripcion
+       FROM productos
+       WHERE estado = TRUE AND codigo = $1
+       LIMIT 1`,
+      [q]
+    );
+    if (exact.rows.length) {
+      rows = exact.rows;
+    }
+  }
+
+  if (!rows.length) {
+    const result = await pool.query(
+      `SELECT id, codigo, descripcion
+       FROM productos
+       WHERE estado = TRUE
+         AND (
+           codigo ILIKE $1 ESCAPE '\\'
+           OR descripcion ILIKE $2 ESCAPE '\\'
+           OR descripcion % $3
+         )
+       ORDER BY
+         CASE WHEN codigo ILIKE $1 ESCAPE '\\' THEN 0 ELSE 1 END,
+         similarity(descripcion, $3) DESC,
+         descripcion,
+         codigo
+       LIMIT 30`,
+      [codePrefix, contains, q]
+    );
+    rows = result.rows;
+  }
   res.json({ ok: true, productos: rows });
 }));
 
@@ -280,4 +310,8 @@ async function saveConteo(userId, conteoId, expectedVersion, upsert, remove, rep
     const version = await bumpVersion(db, conteoId);
     return { ok: true, conteo_id: conteoId, conteo_version: version, lineas };
   });
+}
+
+function escapeLike(value) {
+  return String(value).replace(/[\\%_]/g, (char) => `\\${char}`);
 }
