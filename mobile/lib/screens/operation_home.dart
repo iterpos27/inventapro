@@ -288,6 +288,9 @@ class _OperationHomeState extends State<OperationHome>
   List<CountItem> get validItems =>
       items.where((item) => item.cantidad > 0).toList();
 
+  double get totalUnits =>
+      validItems.fold<double>(0, (sum, item) => sum + item.cantidad);
+
   Future<void> _persistLocalDraft() async {
     final current = conteo;
     if (current == null) {
@@ -467,6 +470,16 @@ class _OperationHomeState extends State<OperationHome>
       return 'Borrador local pendiente de sincronizar.';
     }
     return 'Sin cambios recientes.';
+  }
+
+  Color _statusColor() {
+    if (pendingSyncJob?.status == 'error') {
+      return appRed;
+    }
+    if (_hasUnsavedChanges || pendingSyncJob != null) {
+      return appWarning;
+    }
+    return appGreen;
   }
 
   Future<void> _backToTomaList() async {
@@ -768,6 +781,29 @@ class _OperationHomeState extends State<OperationHome>
                 ),
               ),
               const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _SummaryChip(
+                    label:
+                        '${items.length} ${items.length == 1 ? 'linea' : 'lineas'}',
+                  ),
+                  _SummaryChip(label: '${validItems.length} con cantidad'),
+                  _SummaryChip(
+                    label: '${totalUnits.toStringAsFixed(2)} unidades',
+                  ),
+                  _SummaryChip(
+                    label: pendingSyncJob?.status == 'error'
+                        ? 'Sync con error'
+                        : (_hasUnsavedChanges || pendingSyncJob != null)
+                        ? 'Sync pendiente'
+                        : 'Sync ok',
+                    color: _statusColor(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
               InfoChip(
                 icon: Icons.apartment_outlined,
                 label: 'Agencia: ${current.agencia}',
@@ -977,6 +1013,33 @@ class _OperationHomeState extends State<OperationHome>
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SummaryChip extends StatelessWidget {
+  const _SummaryChip({required this.label, this.color = appPrimary});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }

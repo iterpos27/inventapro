@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Eye, EyeOff, KeyRound, LogOut, Menu, ShieldX, UserCircle } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { FeedbackToast } from './components/FeedbackToast';
@@ -38,6 +38,7 @@ export default function App() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
   const [accountError, setAccountError] = useState('');
+  const accountMenuRef = useRef(null);
   const [branding, setBranding] = useState({
     brand_name: 'InventaPro',
     brand_abbreviation: 'IP',
@@ -105,6 +106,49 @@ export default function App() {
       setRoute(navForUser(user)[0]?.id || 'conteo_borradores');
     }
   }, [route, user]);
+
+  useEffect(() => {
+    setMobileOpen(false);
+    setAccountOpen(false);
+  }, [route]);
+
+  useEffect(() => {
+    if (!accountOpen && !mobileOpen) {
+      return undefined;
+    }
+
+    function handlePointer(event) {
+      if (accountOpen && accountMenuRef.current && !accountMenuRef.current.contains(event.target)) {
+        setAccountOpen(false);
+      }
+    }
+
+    function handleKeydown(event) {
+      if (event.key === 'Escape') {
+        setAccountOpen(false);
+        setMobileOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointer);
+    document.addEventListener('touchstart', handlePointer);
+    document.addEventListener('keydown', handleKeydown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointer);
+      document.removeEventListener('touchstart', handlePointer);
+      document.removeEventListener('keydown', handleKeydown);
+    };
+  }, [accountOpen, mobileOpen]);
+
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
     if (!token) {
@@ -199,7 +243,7 @@ export default function App() {
             <p className="eyebrow">{roleLabel(user?.rol)}</p>
             <h1>{route === 'dashboard' ? 'Panel' : navItems.find((item) => item.id === route)?.label}</h1>
           </div>
-          <div className="account-menu">
+          <div className="account-menu" ref={accountMenuRef}>
             <button
               className="account-trigger"
               onClick={() => setAccountOpen((value) => !value)}

@@ -82,6 +82,14 @@ function savedSnapshot(items) {
     .map((item) => ({ producto_id: Number(item.producto_id), cantidad: Number(item.cantidad) })));
 }
 
+function pickSearchMatch(productos, term) {
+  const clean = normalizeSearchTerm(term);
+  if (!clean || !Array.isArray(productos) || !productos.length) return null;
+  const exact = productos.find((product) => normalizeSearchTerm(product.codigo) === clean);
+  if (exact) return exact;
+  return productos.length === 1 ? productos[0] : null;
+}
+
 export function MiConteo({ request, token }) {
   const [tomas, setTomas] = useState([]);
   const [history, setHistory] = useState([]);
@@ -108,6 +116,10 @@ export function MiConteo({ request, token }) {
   const validItems = useMemo(() => items.filter((item) => Number(item.cantidad) > 0), [items]);
   const visibleItems = items.slice(0, MAX_VISIBLE_ITEMS);
   const itemsSnapshot = useMemo(() => savedSnapshot(items), [items]);
+  const totalUnits = useMemo(
+    () => validItems.reduce((sum, item) => sum + Number(item.cantidad || 0), 0),
+    [validItems]
+  );
 
   const loadTomas = () => request('/mi/tomas').then((data) => setTomas(data.tomas));
   const loadHistory = () => request('/mi/historial').then((data) => setHistory(data.conteos || []));
@@ -207,7 +219,12 @@ export function MiConteo({ request, token }) {
 
     const cached = getCachedSearch(cleanTerm);
     if (cached) {
-      setResults(cached);
+      const picked = pickSearchMatch(cached, cleanTerm);
+      if (picked) {
+        addProduct(picked);
+      } else {
+        setResults(cached);
+      }
       return;
     }
 
@@ -222,7 +239,15 @@ export function MiConteo({ request, token }) {
       if (requestId === searchRequestRef.current) {
         const productos = data.productos || [];
         setCachedSearch(cleanTerm, productos);
-        setResults(productos);
+        const picked = pickSearchMatch(productos, cleanTerm);
+        if (picked) {
+          addProduct(picked);
+        } else {
+          setResults(productos);
+          if (!productos.length) {
+            setWarning('No se encontraron productos para la busqueda realizada.');
+          }
+        }
       }
     } catch (err) {
       if (err.name === 'AbortError') return;
@@ -252,6 +277,7 @@ export function MiConteo({ request, token }) {
   }
 
   function addProduct(product) {
+    setWarning('');
     setItems((current) => {
       const existing = current.find((item) => Number(item.producto_id) === Number(product.id));
       if (existing) {
@@ -394,6 +420,11 @@ export function MiConteo({ request, token }) {
                 <span><Building2 size={14} /> {conteo.agencia || '-'}</span>
                 <span><Calendar size={14} /> {tomaPeriodLabel(conteo, 'habilitacion')}</span>
                 <span><Calendar size={14} /> {tomaPeriodLabel(conteo, 'cierre')}</span>
+              </div>
+              <div className="operation-summary">
+                <span>{items.length} {items.length === 1 ? 'linea' : 'lineas'}</span>
+                <span>{validItems.length} con cantidad</span>
+                <span>{totalUnits.toFixed(2)} unidades</span>
               </div>
             </div>
             <div className="operation-actions">

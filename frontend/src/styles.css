@@ -2095,6 +2095,10 @@ th {
     right: 0;
   }
 
+  .account-menu {
+    position: static;
+  }
+
   .login-screen {
     align-items: start;
     padding-top: 70px;
@@ -2952,6 +2956,26 @@ th {
   color: #1570ef;
 }
 
+.user-conteo-active .operation-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.user-conteo-active .operation-summary span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid #d8e3ef;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #31577f;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .user-conteo-active .operation-actions {
   align-self: center;
 }
@@ -3041,13 +3065,18 @@ th {
     display: grid;
   }
 
+  .user-conteo-active .operation-summary {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
   .user-conteo-active {
-    padding-bottom: 80px;
+    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
   }
 
   .user-conteo-active .operation-actions .draft-save-action {
     position: fixed;
-    bottom: 0;
+    bottom: env(safe-area-inset-bottom, 0px);
     left: 0;
     right: 0;
     z-index: 100;
