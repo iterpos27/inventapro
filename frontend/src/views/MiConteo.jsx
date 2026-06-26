@@ -82,6 +82,50 @@ function savedSnapshot(items) {
     .map((item) => ({ producto_id: Number(item.producto_id), cantidad: Number(item.cantidad) })));
 }
 
+function normalizedSyncItems(items) {
+  return items
+    .map((item) => ({
+      producto_id: Number(item.producto_id),
+      cantidad: Number(item.cantidad || 0)
+    }))
+    .filter((item) => item.producto_id > 0)
+    .sort((a, b) => a.producto_id - b.producto_id);
+}
+
+function buildSyncPayload(currentItems, savedItems) {
+  const currentMap = new Map();
+  const savedMap = new Map();
+
+  normalizedSyncItems(currentItems).forEach((item) => {
+    currentMap.set(item.producto_id, item.cantidad);
+  });
+  normalizedSyncItems(savedItems).forEach((item) => {
+    savedMap.set(item.producto_id, item.cantidad);
+  });
+
+  const productIds = new Set([...currentMap.keys(), ...savedMap.keys()]);
+  const upsert = [];
+  const remove = [];
+
+  productIds.forEach((productoId) => {
+    const currentQty = currentMap.get(productoId) ?? 0;
+    const savedQty = savedMap.get(productoId) ?? 0;
+
+    if (currentQty <= 0 && savedQty <= 0) {
+      return;
+    }
+    if (currentQty <= 0 && savedQty > 0) {
+      remove.push({ producto_id: productoId });
+      return;
+    }
+    if (savedQty !== currentQty) {
+      upsert.push({ producto_id: productoId, cantidad: currentQty });
+    }
+  });
+
+  return { upsert, remove };
+}
+
 function pickSearchMatch(productos, term) {
   const clean = normalizeSearchTerm(term);
   if (!clean || !Array.isArray(productos) || !productos.length) return null;
@@ -111,6 +155,7 @@ export function MiConteo({ request, token }) {
   const searchInputRef = useRef(null);
   const quantityRefs = useRef(new Map());
   const lastSavedSnapshotRef = useRef('[]');
+  const lastSavedItemsRef = useRef([]);
   const savingRef = useRef(false);
 
   const validItems = useMemo(() => items.filter((item) => Number(item.cantidad) > 0), [items]);
@@ -201,6 +246,7 @@ export function MiConteo({ request, token }) {
       setConteo(data.conteo);
       setItems(loadedItems);
       lastSavedSnapshotRef.current = savedSnapshot(loadedItems);
+      lastSavedItemsRef.current = loadedItems;
       setSaveStatus('Sin cambios recientes.');
       setResults([]);
       setQ('');
@@ -311,17 +357,27 @@ export function MiConteo({ request, token }) {
       return;
     }
 
-    const endpoint = finish ? 'finalizar' : 'borrador';
+    const payload = finish
+      ? { conteo_version: conteo.version, items: validItems }
+      : buildSyncPayload(items, lastSavedItemsRef.current);
+
+    if (!finish && payload.upsert.length === 0 && payload.remove.length === 0) {
+      setSaveStatus('Sin cambios recientes.');
+      return;
+    }
+
+    const endpoint = finish ? 'finalizar' : 'guardar_cambios';
     savingRef.current = true;
     setSaving(true);
     setSaveStatus(finish ? 'Finalizando conteo...' : 'Guardando borrador...');
     try {
       const data = await request(`/mi/conteos/${conteo.id}/${endpoint}`, {
         method: 'POST',
-        body: JSON.stringify({ conteo_version: conteo.version, items: validItems })
+        body: JSON.stringify({ conteo_version: conteo.version, ...(finish ? payload : payload) })
       });
       setConteo((current) => current ? { ...current, version: data.conteo_version, estado: data.estado } : current);
       lastSavedSnapshotRef.current = itemsSnapshot;
+      lastSavedItemsRef.current = items;
       const savedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       setSaveStatus(finish ? 'Conteo finalizado.' : `Borrador guardado automaticamente a las ${savedAt}.`);
       if (!silent) setMessage(finish ? 'Conteo finalizado' : 'Borrador guardado');
@@ -330,6 +386,7 @@ export function MiConteo({ request, token }) {
         setConteo(null);
         setItems([]);
         lastSavedSnapshotRef.current = '[]';
+        lastSavedItemsRef.current = [];
         await loadTomas();
         await loadHistory();
       }
