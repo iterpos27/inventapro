@@ -14,18 +14,6 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     detectionSpeed: DetectionSpeed.noDuplicates,
     facing: CameraFacing.back,
     torchEnabled: false,
-    formats: [
-      BarcodeFormat.qrCode,
-      BarcodeFormat.code128,
-      BarcodeFormat.code39,
-      BarcodeFormat.ean13,
-      BarcodeFormat.ean8,
-      BarcodeFormat.upcA,
-      BarcodeFormat.upcE,
-      BarcodeFormat.dataMatrix,
-      BarcodeFormat.pdf417,
-      BarcodeFormat.aztec,
-    ],
   );
 
   @override
@@ -44,7 +32,6 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         continue;
       }
       _handlingCode = true;
-      _controller.stop();
       Navigator.of(context).pop(raw);
       return;
     }

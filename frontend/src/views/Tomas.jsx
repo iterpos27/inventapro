@@ -13,7 +13,7 @@ import {
 import { FeedbackToast } from '../components/FeedbackToast';
 import { IconAction } from '../components/IconAction';
 import { DataTable } from '../components/DataTable';
-import { LiveConteoModal } from '../components/LiveConteoModal';
+import { LiveConteoView } from '../components/LiveConteoView';
 import { Modal } from '../components/Modal';
 import { downloadFile } from '../services/api';
 import {
@@ -196,6 +196,27 @@ export function Tomas({ request, token }) {
 
   if (selected) {
     const canDelete = Number(resumen?.lineas || 0) === 0;
+    if (liveTarget?.conteo_id) {
+      return (
+        <div className="users-page tomas-page toma-detail-page">
+          <LiveConteoView
+            request={request}
+            tomaId={selected.id}
+            conteoId={liveTarget.conteo_id}
+            participant={liveTarget}
+            onBack={async () => {
+              setLiveTarget(null);
+              await openDetail(selected.id);
+              await load();
+            }}
+            onSaved={async () => {
+              await openDetail(selected.id);
+              await load();
+            }}
+          />
+        </div>
+      );
+    }
     return (
       <div className="users-page tomas-page toma-detail-page">
         <div className="admin-page-heading toma-detail-heading">
@@ -344,19 +365,6 @@ export function Tomas({ request, token }) {
           <Modal title="Editar toma" onClose={() => setModalOpen(false)}>
             <TomaForm form={form} setForm={setForm} users={users} agencias={agencias} onSubmit={updateToma} submitLabel="Guardar cambios" />
           </Modal>
-        ) : null}
-        {liveTarget?.conteo_id ? (
-          <LiveConteoModal
-            request={request}
-            tomaId={selected.id}
-            conteoId={liveTarget.conteo_id}
-            participant={liveTarget}
-            onClose={async () => {
-              setLiveTarget(null);
-              await openDetail(selected.id);
-              await load();
-            }}
-          />
         ) : null}
       </div>
     );

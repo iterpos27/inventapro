@@ -687,6 +687,34 @@ webApi.get('/tomas/:tomaId/conteos/:conteoId/live', requireWebUser, requirePermi
   });
 }));
 
+webApi.get('/tomas/:tomaId/conteos/:conteoId/live/status', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const tomaId = Number(req.params.tomaId || 0);
+  const conteoId = Number(req.params.conteoId || 0);
+  if (tomaId <= 0 || conteoId <= 0) {
+    throw new AppError('Conteo invalido', 422);
+  }
+
+  const detail = await pool.query(
+    `SELECT c.id, c.version, c.estado, COUNT(d.id)::int AS lineas
+     FROM conteos c
+     LEFT JOIN conteo_detalle d ON d.conteo_id = c.id
+     WHERE c.id = $1 AND c.toma_id = $2
+     GROUP BY c.id, c.version, c.estado
+     LIMIT 1`,
+    [conteoId, tomaId]
+  );
+  if (!detail.rows[0]) {
+    throw new AppError('Conteo no encontrado', 404);
+  }
+
+  res.json({
+    ok: true,
+    version: Number(detail.rows[0].version || 0),
+    lineas: Number(detail.rows[0].lineas || 0),
+    estado: detail.rows[0].estado || 'borrador'
+  });
+}));
+
 webApi.put('/tomas/:tomaId/conteos/:conteoId/live', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
   const tomaId = Number(req.params.tomaId || 0);
   const conteoId = Number(req.params.conteoId || 0);
