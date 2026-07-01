@@ -25,6 +25,7 @@ import {
   listUserCountHistory,
   refreshTomaSummary,
   replaceDetalle,
+  upsertDetalle,
   validateTomaWindow
 } from '../services/conteoService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -227,7 +228,7 @@ webApi.get('/mi/tomas', requireWebUser, requirePermission('count'), asyncHandler
             COUNT(d.id)::int AS lineas
      FROM toma_usuarios tu
      INNER JOIN tomas_fisicas t ON t.id = tu.toma_id
-     LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id
+     LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id AND c.estado = 'borrador'
      LEFT JOIN conteo_detalle d ON d.conteo_id = c.id
      WHERE tu.usuario_id = $1 AND t.estado = 'abierta' AND tu.estado != 'finalizado'
      GROUP BY t.id, t.numero_toma, t.nombre_toma, t.agencia, t.estado,
@@ -266,10 +267,10 @@ webApi.post('/mi/tomas/:id/iniciar', requireWebUser, requirePermission('count'),
     }
     validateTomaWindow(toma);
 
-    const current = await db.query('SELECT id, estado FROM conteos WHERE toma_id = $1 AND usuario_id = $2 LIMIT 1', [tomaId, req.user.id]);
-    if (current.rows[0] && current.rows[0].estado !== 'borrador') {
-      throw new AppError('Conteo no disponible', 422);
-    }
+    const current = await db.query(
+      "SELECT id, estado FROM conteos WHERE toma_id = $1 AND usuario_id = $2 AND estado = 'borrador' LIMIT 1",
+      [tomaId, req.user.id]
+    );
     let id = current.rows[0]?.id;
     if (!id) {
       const created = await db.query(
@@ -329,6 +330,22 @@ webApi.post('/mi/conteos/:id/borrador', requireWebUser, requirePermission('count
     throw new AppError('Datos incompletos', 422);
   }
   const result = await saveWebConteo(req.user.id, conteoId, expectedVersion, items, false);
+  res.json(result);
+}));
+
+webApi.post('/mi/conteos/:id/guardar_cambios', requireWebUser, requirePermission('count'), asyncHandler(async (req, res) => {
+  const conteoId = Number(req.params.id || 0);
+  const upsert = Array.isArray(req.body.upsert) ? req.body.upsert : [];
+  const remove = Array.isArray(req.body.remove) ? req.body.remove : [];
+  const expectedVersion = Number(req.body.conteo_version || 0);
+  if (conteoId <= 0) {
+    throw new AppError('Conteo invalido', 422);
+  }
+  if (upsert.length === 0 && remove.length === 0) {
+    throw new AppError('Sin cambios para guardar', 422);
+  }
+
+  const result = await saveWebConteoDiff(req.user.id, conteoId, expectedVersion, upsert, remove);
   res.json(result);
 }));
 
@@ -1262,6 +1279,30 @@ async function saveWebConteo(userId, conteoId, expectedVersion, items, finish) {
     }
 
     return { ok: true, conteo_id: conteoId, conteo_version: version, lineas, estado: finish ? 'finalizado' : 'borrador' };
+  });
+}
+
+async function saveWebConteoDiff(userId, conteoId, expectedVersion, upsert, remove) {
+  return withTransaction(async (db) => {
+    const conteo = await activeDraftForUser(db, conteoId, userId, true);
+    if (!conteo) {
+      throw new AppError('Conteo no disponible', 422);
+    }
+    validateTomaWindow(conteo);
+    assertVersion(conteo, expectedVersion);
+    await upsertDetalle(db, conteoId, upsert, remove);
+    const lineasResult = await db.query(
+      'SELECT COUNT(*)::int AS total FROM conteo_detalle WHERE conteo_id = $1',
+      [conteoId]
+    );
+    const version = await bumpVersion(db, conteoId);
+    return {
+      ok: true,
+      conteo_id: conteoId,
+      conteo_version: version,
+      lineas: Number(lineasResult.rows[0]?.total || 0),
+      estado: 'borrador'
+    };
   });
 }
 

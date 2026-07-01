@@ -96,7 +96,7 @@ mobileApi.get('/tomas', requireApiUser, asyncHandler(async (req, res) => {
             COALESCE(COUNT(cd.id), 0)::int AS lineas
      FROM toma_usuarios tu
      INNER JOIN tomas_fisicas t ON t.id = tu.toma_id
-     LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id
+     LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id AND c.estado = 'borrador'
      LEFT JOIN conteo_detalle cd ON cd.conteo_id = c.id
      WHERE tu.usuario_id = $1 AND t.estado = 'abierta' AND tu.estado != 'finalizado'
      GROUP BY t.id, tu.estado, c.id
@@ -133,10 +133,10 @@ mobileApi.post('/iniciar_conteo', requireApiUser, asyncHandler(async (req, res) 
     }
     validateTomaWindow(toma);
 
-    const current = await db.query('SELECT id, estado FROM conteos WHERE toma_id = $1 AND usuario_id = $2 LIMIT 1', [tomaId, req.user.id]);
-    if (current.rows[0] && current.rows[0].estado !== 'borrador') {
-      throw new AppError('Conteo no disponible', 422);
-    }
+    const current = await db.query(
+      "SELECT id, estado FROM conteos WHERE toma_id = $1 AND usuario_id = $2 AND estado = 'borrador' LIMIT 1",
+      [tomaId, req.user.id]
+    );
     let id = current.rows[0]?.id;
     if (!id) {
       const created = await db.query(

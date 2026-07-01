@@ -5,7 +5,6 @@ import {
   Calendar,
   CheckCircle,
   Circle,
-  Download,
   Plus,
   Save,
   Search,
@@ -13,7 +12,6 @@ import {
   X
 } from 'lucide-react';
 import { FeedbackToast } from '../components/FeedbackToast';
-import { downloadFile } from '../services/api';
 
 const SEARCH_CACHE_KEY = 'conteo_recent_searches_v1';
 const SEARCH_CACHE_LIMIT = 100;
@@ -134,9 +132,8 @@ function pickSearchMatch(productos, term) {
   return productos.length === 1 ? productos[0] : null;
 }
 
-export function MiConteo({ request, token }) {
+export function MiConteo({ request }) {
   const [tomas, setTomas] = useState([]);
-  const [history, setHistory] = useState([]);
   const [conteo, setConteo] = useState(null);
   const [items, setItems] = useState([]);
   const [q, setQ] = useState('');
@@ -167,11 +164,9 @@ export function MiConteo({ request, token }) {
   );
 
   const loadTomas = () => request('/mi/tomas').then((data) => setTomas(data.tomas));
-  const loadHistory = () => request('/mi/historial').then((data) => setHistory(data.conteos || []));
 
   useEffect(() => {
     loadTomas();
-    loadHistory();
   }, []);
 
   useEffect(() => () => {
@@ -388,7 +383,6 @@ export function MiConteo({ request, token }) {
         lastSavedSnapshotRef.current = '[]';
         lastSavedItemsRef.current = [];
         await loadTomas();
-        await loadHistory();
       }
     } catch (err) {
       setError(err.message);
@@ -436,28 +430,6 @@ export function MiConteo({ request, token }) {
               </button>
             ))}
             {tomas.length === 0 ? <p className="muted">No hay tomas abiertas asignadas.</p> : null}
-          </div>
-        </section>
-        <section className="panel users-card report-card operator-history-card">
-          <div className="section-title"><h2>Historial de conteos</h2></div>
-          <div className="table-wrap">
-            <table className="admin-table users-table report-table">
-              <thead><tr><th>Toma</th><th>Agencia</th><th>Estado</th><th>Lineas</th><th>Unidades</th><th>Finalizacion</th><th>Excel</th></tr></thead>
-              <tbody>
-                {history.map((item) => (
-                  <tr key={item.id}>
-                    <td><strong>{tomaTitle(item.numero_toma)}</strong><span>{item.nombre_toma || ''}</span></td>
-                    <td>{item.agencia || '-'}</td>
-                    <td><span className={`report-status ${item.estado === 'finalizado' ? 'done' : 'open'}`}>{item.estado}</span></td>
-                    <td>{item.lineas || 0}</td>
-                    <td>{Number(item.unidades || 0).toFixed(2)}</td>
-                    <td>{formatDateTime(item.fecha_finalizacion || item.fecha_inicio)}</td>
-                    <td>{item.estado === 'finalizado' && item.conteo_id ? <button className="edit-text-btn success" type="button" onClick={() => downloadFile(token, `/conteos/${item.conteo_id}/excel`).catch((err) => setError(err.message))}><Download size={14} />Descargar</button> : <span className="muted">Pendiente</span>}</td>
-                  </tr>
-                ))}
-                {history.length === 0 ? <tr><td colSpan="7" className="empty-table">Todavia no hay conteos registrados.</td></tr> : null}
-              </tbody>
-            </table>
           </div>
         </section>
       </div>
