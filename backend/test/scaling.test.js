@@ -10,8 +10,10 @@ test('closeExpiredTomas intenta adquirir el lock advisory y maneja la base corre
   let advisoryLockChecked = false;
   let queryCount = 0;
 
-  const mockDbClient = {
-    connect: () => mockDbClient,
+  const mockPool = {
+    connect: async () => mockClient,
+  };
+  const mockClient = {
     release: () => {},
     query: async (sql) => {
       queryCount += 1;
@@ -38,7 +40,7 @@ test('closeExpiredTomas intenta adquirir el lock advisory y maneja la base corre
     }
   };
 
-  await closeExpiredTomas(mockDbClient);
+  await closeExpiredTomas(mockPool);
 
   assert.equal(beginCalled, true);
   assert.equal(commitCalled, true);
@@ -51,8 +53,10 @@ test('closeExpiredTomas retorna inmediatamente si el advisory lock es denegado',
   let rollbackCalled = false;
   let queryCount = 0;
 
-  const mockDbClient = {
-    connect: () => mockDbClient,
+  const mockPool = {
+    connect: async () => mockClient,
+  };
+  const mockClient = {
     release: () => {},
     query: async (sql) => {
       queryCount += 1;
@@ -69,11 +73,42 @@ test('closeExpiredTomas retorna inmediatamente si el advisory lock es denegado',
     }
   };
 
-  await closeExpiredTomas(mockDbClient);
+  await closeExpiredTomas(mockPool);
 
   assert.equal(beginCalled, true);
   assert.equal(rollbackCalled, true);
   assert.equal(queryCount, 3);
+});
+
+test('closeExpiredTomas no intenta abrir otra transaccion cuando recibe un cliente activo', async () => {
+  let beginCalled = false;
+  let releaseCalled = false;
+  let advisoryLockChecked = false;
+
+  const activeClient = {
+    release: () => {
+      releaseCalled = true;
+    },
+    query: async (sql) => {
+      if (sql === 'BEGIN') {
+        beginCalled = true;
+      }
+      if (sql.includes('pg_try_advisory_xact_lock')) {
+        advisoryLockChecked = true;
+        return { rowCount: 1, rows: [{ pg_try_advisory_xact_lock: true }] };
+      }
+      if (sql.includes('SELECT id FROM tomas_fisicas')) {
+        return { rowCount: 0, rows: [] };
+      }
+      return { rowCount: 0, rows: [] };
+    }
+  };
+
+  await closeExpiredTomas(activeClient, 1);
+
+  assert.equal(beginCalled, false);
+  assert.equal(releaseCalled, false);
+  assert.equal(advisoryLockChecked, true);
 });
 
 test('listUserCountHistory incluye asignaciones cerradas aunque no tengan conteo', async () => {

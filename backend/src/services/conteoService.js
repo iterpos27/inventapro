@@ -3,7 +3,7 @@ import { exportConteoExcel } from '../services/excelService.js';
 import { pool } from '../db/pool.js';
 
 export async function closeExpiredTomas(db, tomaId = null) {
-  const isPool = typeof db.connect === 'function';
+  const isPool = typeof db.connect === 'function' && typeof db.release !== 'function';
   const client = isPool ? await db.connect() : db;
 
   try {
