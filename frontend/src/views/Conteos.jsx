@@ -40,7 +40,8 @@ export function Conteos({ request, token, user }) {
   }, [isAdmin]);
 
   const filtered = useMemo(() => items.filter((item) => {
-    const inRange = isWithinRange(item.fecha_inicio || item.fecha_finalizacion, from, to);
+    const inRange = item.toma_estado === 'abierta'
+      || isWithinRange(item.fecha_inicio || item.fecha_finalizacion, from, to);
     const statusMatch = status === 'todos'
       || (status === 'finalizada' ? item.estado === 'finalizado' : item.estado !== 'finalizado');
     return inRange && statusMatch;
@@ -48,7 +49,7 @@ export function Conteos({ request, token, user }) {
   const dailyRows = useMemo(() => buildDailyReport(filtered), [filtered]);
   const tomaRows = useMemo(() => tomas.filter((item) => {
     const date = item.fecha_finalizacion || item.fecha_cierre || item.fecha_creacion;
-    const inRange = isWithinRange(date, from, to);
+    const inRange = item.estado === 'abierta' || isWithinRange(date, from, to);
     return inRange && (status === 'todos' || item.estado === status);
   }), [from, tomas, status, to]);
 

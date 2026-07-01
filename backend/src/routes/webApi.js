@@ -815,7 +815,7 @@ webApi.post('/tomas/:id/usuarios/:usuarioId/habilitar', requireWebUser, requireP
 
 webApi.get('/conteos', requireWebUser, requirePermission('reports'), asyncHandler(async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT c.*, u.nombre AS usuario_nombre, t.numero_toma, t.nombre_toma
+    `SELECT c.*, u.nombre AS usuario_nombre, t.numero_toma, t.nombre_toma, t.estado AS toma_estado
      FROM conteos c
      INNER JOIN usuarios u ON u.id = c.usuario_id
      LEFT JOIN tomas_fisicas t ON t.id = c.toma_id
@@ -834,13 +834,13 @@ webApi.get('/reportes/resumen', requireWebUser, requirePermission('reports'), as
 
   if (from && isIsoDate(from)) {
     params.push(from);
-    tomaFilters.push(`COALESCE(t.fecha_finalizacion::date, t.fecha_cierre, t.fecha_habilitacion) >= $${params.length}`);
-    userFilters.push(`COALESCE(c.fecha_finalizacion::date, c.fecha_inicio::date, t.fecha_finalizacion::date, t.fecha_cierre, t.fecha_habilitacion) >= $${params.length}`);
+    tomaFilters.push(`(t.estado = 'abierta' OR COALESCE(t.fecha_finalizacion::date, t.fecha_cierre, t.fecha_habilitacion) >= $${params.length})`);
+    userFilters.push(`(t.estado = 'abierta' OR COALESCE(c.fecha_finalizacion::date, c.fecha_inicio::date, t.fecha_finalizacion::date, t.fecha_cierre, t.fecha_habilitacion) >= $${params.length})`);
   }
   if (to && isIsoDate(to)) {
     params.push(to);
-    tomaFilters.push(`COALESCE(t.fecha_finalizacion::date, t.fecha_cierre, t.fecha_habilitacion) <= $${params.length}`);
-    userFilters.push(`COALESCE(c.fecha_finalizacion::date, c.fecha_inicio::date, t.fecha_finalizacion::date, t.fecha_cierre, t.fecha_habilitacion) <= $${params.length}`);
+    tomaFilters.push(`(t.estado = 'abierta' OR COALESCE(t.fecha_finalizacion::date, t.fecha_cierre, t.fecha_habilitacion) <= $${params.length})`);
+    userFilters.push(`(t.estado = 'abierta' OR COALESCE(c.fecha_finalizacion::date, c.fecha_inicio::date, t.fecha_finalizacion::date, t.fecha_cierre, t.fecha_habilitacion) <= $${params.length})`);
   }
 
   const tomaWhere = tomaFilters.length ? `WHERE ${tomaFilters.join(' AND ')}` : '';
