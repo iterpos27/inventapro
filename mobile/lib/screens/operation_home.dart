@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../api_client.dart';
 import '../app_theme.dart';
@@ -38,6 +39,7 @@ class OperationHome extends StatefulWidget {
 
 class _OperationHomeState extends State<OperationHome>
     with WidgetsBindingObserver {
+  static const int _maxCountDescription = 75;
   List<Toma> tomas = [];
   List<CountHistory> history = [];
   ConteoInfo? conteo;
@@ -142,15 +144,6 @@ class _OperationHomeState extends State<OperationHome>
   String _normalizeSearchTerm(String value) =>
       value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
 
-  Product? _findExactProduct(Iterable<Product> source, String term) {
-    for (final product in source) {
-      if (product.codigo.trim().toLowerCase() == term) {
-        return product;
-      }
-    }
-    return null;
-  }
-
   Future<void> _search(String value) async {
     searchTimer?.cancel();
     final term = _normalizeSearchTerm(value);
@@ -162,12 +155,7 @@ class _OperationHomeState extends State<OperationHome>
       final cached = await widget.store.readSearch(term);
       if (cached != null) {
         if (mounted) {
-          final exactMatch = _findExactProduct(cached, term);
-          if (exactMatch != null) {
-            _addOrIncrementProduct(exactMatch);
-          } else {
-            setState(() => results = cached);
-          }
+          setState(() => results = cached);
         }
         return;
       }
@@ -175,12 +163,7 @@ class _OperationHomeState extends State<OperationHome>
         final data = await widget.api.searchProducts(term);
         await widget.store.saveSearch(term, data);
         if (mounted) {
-          final exactMatch = _findExactProduct(data, term);
-          if (exactMatch != null) {
-            _addOrIncrementProduct(exactMatch);
-          } else {
-            setState(() => results = data);
-          }
+          setState(() => results = data);
         }
       } catch (err) {
         _toast('$err', isError: true);
@@ -197,20 +180,11 @@ class _OperationHomeState extends State<OperationHome>
     try {
       final data = await widget.api.searchProducts(term);
       if (mounted) {
-        var exactMatch = _findExactProduct(data, term);
-        if (exactMatch == null && data.length == 1) {
-          exactMatch = data.first;
-        }
-
-        if (exactMatch != null) {
-          _addOrIncrementProduct(exactMatch);
-        } else {
-          setState(() {
-            results = data;
-          });
-          if (data.isEmpty) {
-            _toast('No se encontraron productos.', isWarning: true);
-          }
+        setState(() {
+          results = data;
+        });
+        if (data.isEmpty) {
+          _toast('No se encontraron productos.', isWarning: true);
         }
       }
     } catch (err) {
@@ -236,7 +210,7 @@ class _OperationHomeState extends State<OperationHome>
           CountItem(
             productoId: product.id,
             codigo: product.codigo,
-            descripcion: product.descripcion,
+            descripcion: _shortDescription(product.descripcion),
             cantidad: 0,
           ),
           ...items,
@@ -260,12 +234,13 @@ class _OperationHomeState extends State<OperationHome>
   }
 
   void _updateQty(int productoId, String value) {
-    final qty = double.tryParse(value.replaceAll(',', '.')) ?? 0;
+    final raw = value.trim().replaceAll(',', '.');
+    final qty = double.tryParse(raw);
     setState(() {
       items = items
           .map(
             (item) => item.productoId == productoId
-                ? item.copyWith(cantidad: qty)
+                ? item.copyWith(cantidad: qty != null && qty > 0 ? qty : 0)
                 : item,
           )
           .toList();
@@ -287,9 +262,6 @@ class _OperationHomeState extends State<OperationHome>
 
   List<CountItem> get validItems =>
       items.where((item) => item.cantidad > 0).toList();
-
-  double get totalUnits =>
-      validItems.fold<double>(0, (sum, item) => sum + item.cantidad);
 
   Future<void> _persistLocalDraft() async {
     final current = conteo;
@@ -451,9 +423,17 @@ class _OperationHomeState extends State<OperationHome>
   String _title(String raw) {
     final value = raw.trim();
     if (value.toUpperCase().startsWith('TOMA FISICA #')) {
-      return value.toUpperCase();
+      return value.toUpperCase().replaceFirst('TOMA FISICA ', '');
     }
-    return 'TOMA FISICA # $value'.toUpperCase();
+    return '# $value'.toUpperCase();
+  }
+
+  String _shortDescription(String value) {
+    final clean = value.trim();
+    if (clean.length <= _maxCountDescription) {
+      return clean;
+    }
+    return clean.substring(0, _maxCountDescription);
   }
 
   String _period(String date, String hour) {
@@ -470,16 +450,6 @@ class _OperationHomeState extends State<OperationHome>
       return 'Borrador local pendiente de sincronizar.';
     }
     return 'Sin cambios recientes.';
-  }
-
-  Color _statusColor() {
-    if (pendingSyncJob?.status == 'error') {
-      return appRed;
-    }
-    if (_hasUnsavedChanges || pendingSyncJob != null) {
-      return appWarning;
-    }
-    return appGreen;
   }
 
   Future<void> _backToTomaList() async {
@@ -523,7 +493,7 @@ class _OperationHomeState extends State<OperationHome>
               ),
             ),
             Text(
-              current == null ? widget.user.nombre : 'Conteo y Borradores',
+              current == null ? widget.user.nombre : _title(current.numeroToma),
               style: const TextStyle(
                 color: appBlue,
                 fontSize: 14,
@@ -780,44 +750,6 @@ class _OperationHomeState extends State<OperationHome>
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _SummaryChip(
-                    label:
-                        '${items.length} ${items.length == 1 ? 'linea' : 'lineas'}',
-                  ),
-                  _SummaryChip(label: '${validItems.length} con cantidad'),
-                  _SummaryChip(
-                    label: '${totalUnits.toStringAsFixed(2)} unidades',
-                  ),
-                  _SummaryChip(
-                    label: pendingSyncJob?.status == 'error'
-                        ? 'Sync con error'
-                        : (_hasUnsavedChanges || pendingSyncJob != null)
-                        ? 'Sync pendiente'
-                        : 'Sync ok',
-                    color: _statusColor(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              InfoChip(
-                icon: Icons.apartment_outlined,
-                label: 'Agencia: ${current.agencia}',
-              ),
-              InfoChip(
-                icon: Icons.calendar_month_outlined,
-                label:
-                    'Habilitacion: ${_period(current.fechaHabilitacion, current.horaInicio)}',
-              ),
-              InfoChip(
-                icon: Icons.event_available_outlined,
-                label:
-                    'Cierre: ${_period(current.fechaCierre, current.horaFin)}',
-              ),
               const SizedBox(height: 14),
               FilledButton.icon(
                 onPressed: saving || validItems.isEmpty ? null : _finish,
@@ -886,7 +818,7 @@ class _OperationHomeState extends State<OperationHome>
                               ),
                             ),
                             subtitle: Text(
-                              product.descripcion,
+                              _shortDescription(product.descripcion),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(fontSize: 12),
@@ -968,7 +900,7 @@ class _OperationHomeState extends State<OperationHome>
                               ),
                             ),
                             Text(
-                              item.descripcion,
+                              _shortDescription(item.descripcion),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -986,20 +918,29 @@ class _OperationHomeState extends State<OperationHome>
                           key: ValueKey('${item.productoId}-${item.cantidad}'),
                           focusNode: qtyFocus,
                           style: const TextStyle(fontSize: 13),
-                          initialValue: item.cantidad.toStringAsFixed(
-                            item.cantidad.truncateToDouble() == item.cantidad
-                                ? 0
-                                : 2,
-                          ),
+                          initialValue: item.cantidad <= 0
+                              ? ''
+                              : item.cantidad.toStringAsFixed(
+                                  item.cantidad.truncateToDouble() ==
+                                          item.cantidad
+                                      ? 0
+                                      : 2,
+                                ),
                           textAlign: TextAlign.center,
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'^\d*([.,]\d{0,2})?$'),
+                            ),
+                          ],
                           decoration: const InputDecoration(
                             contentPadding: EdgeInsets.symmetric(
                               horizontal: 8,
                               vertical: 10,
                             ),
+                            hintText: '0.01',
                           ),
                           onChanged: (value) =>
                               _updateQty(item.productoId, value),
@@ -1013,33 +954,6 @@ class _OperationHomeState extends State<OperationHome>
           ),
         ),
       ],
-    );
-  }
-}
-
-class _SummaryChip extends StatelessWidget {
-  const _SummaryChip({required this.label, this.color = appPrimary});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.28)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
     );
   }
 }

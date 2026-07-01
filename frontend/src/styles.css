@@ -2486,6 +2486,22 @@ th {
   min-width: 0;
 }
 
+.user-conteo-shell .operation-back-btn {
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #bfd7ef;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1c4f82;
+  padding: 0;
+}
+
+.user-conteo-shell .operation-back-btn:hover {
+  background: #eef6ff;
+}
+
 .user-conteo-shell .operation-tag,
 .user-conteo-shell .save-status {
   width: fit-content;
@@ -2549,6 +2565,14 @@ th {
 
 .user-conteo-shell .count-search-box {
   position: relative;
+  min-width: 0;
+}
+
+.user-conteo-shell .count-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
 }
 
 .user-conteo-shell .search-leading-icon {
@@ -2587,6 +2611,25 @@ th {
 .user-conteo-shell .search-clear:hover {
   background: #eef4ff;
   color: #003a70;
+}
+
+.user-conteo-shell .scan-trigger {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #bfd7ef;
+  border-radius: 6px;
+  background: #eef6ff;
+  color: #1c4f82;
+  padding: 0 14px;
+  font-weight: 900;
+}
+
+.user-conteo-shell .scan-trigger:hover {
+  border-color: #2563a7;
+  background: #dbeafe;
 }
 
 .user-conteo-shell .search-results {
@@ -2771,6 +2814,15 @@ th {
     min-height: 48px;
     padding-right: 46px;
     font-size: 1rem;
+  }
+
+  .user-conteo-shell .count-search-row {
+    grid-template-columns: 1fr;
+  }
+
+  .user-conteo-shell .scan-trigger {
+    width: 100%;
+    min-height: 46px;
   }
 
   .user-conteo-shell .search-clear {
@@ -3026,6 +3078,63 @@ th {
   margin-bottom: 20px;
 }
 
+.scanner-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  background: rgba(17, 24, 39, 0.72);
+  padding: 18px;
+}
+
+.scanner-panel {
+  width: min(460px, 100%);
+  display: grid;
+  gap: 12px;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 16px;
+  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.3);
+}
+
+.scanner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scanner-header strong {
+  color: #003a70;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.scanner-panel p {
+  margin: 0;
+  color: #475467;
+  line-height: 1.45;
+}
+
+.scanner-viewport {
+  overflow: hidden;
+  border-radius: 8px;
+  background: #0f172a;
+}
+
+.scanner-viewport video {
+  width: 100%;
+  display: block;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.scanner-error {
+  color: #b42318 !important;
+  font-weight: 800;
+}
+
 .user-conteo-active .empty-count-message {
   margin: 18px 0 4px;
   color: #31577f;
@@ -3062,12 +3171,11 @@ th {
   }
 
   .user-conteo-active .operation-meta {
-    display: grid;
+    display: none;
   }
 
   .user-conteo-active .operation-summary {
-    display: grid;
-    grid-template-columns: 1fr;
+    display: none;
   }
 
   .user-conteo-active {

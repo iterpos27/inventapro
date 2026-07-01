@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowLeft,
   ArrowRightCircle,
-  Building2,
-  Calendar,
   CheckCircle,
   Circle,
   Plus,
+  QrCode,
   Save,
   Search,
   Trash2,
@@ -17,6 +17,7 @@ const SEARCH_CACHE_KEY = 'conteo_recent_searches_v1';
 const SEARCH_CACHE_LIMIT = 100;
 const MAX_VISIBLE_ITEMS = 50;
 const AUTO_SAVE_DELAY = 180000;
+const MAX_COUNT_DESCRIPTION = 75;
 
 function readSearchCache() {
   try {
@@ -74,6 +75,10 @@ function tomaTitle(numeroToma) {
   return value.replace(/^TOMA\s+FISICA\s+#\s*/i, '# ').replace(/^#?\s*/, '# ').toUpperCase();
 }
 
+function clampCountDescription(value) {
+  return String(value || '').trim().slice(0, MAX_COUNT_DESCRIPTION);
+}
+
 function savedSnapshot(items) {
   return JSON.stringify(items
     .filter((item) => Number(item.cantidad) > 0)
@@ -124,14 +129,6 @@ function buildSyncPayload(currentItems, savedItems) {
   return { upsert, remove };
 }
 
-function pickSearchMatch(productos, term) {
-  const clean = normalizeSearchTerm(term);
-  if (!clean || !Array.isArray(productos) || !productos.length) return null;
-  const exact = productos.find((product) => normalizeSearchTerm(product.codigo) === clean);
-  if (exact) return exact;
-  return productos.length === 1 ? productos[0] : null;
-}
-
 export function MiConteo({ request }) {
   const [tomas, setTomas] = useState([]);
   const [conteo, setConteo] = useState(null);
@@ -144,6 +141,8 @@ export function MiConteo({ request }) {
   const [highlightedId, setHighlightedId] = useState(null);
   const [saveStatus, setSaveStatus] = useState('Sin cambios recientes.');
   const [saving, setSaving] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState('');
   const searchAbortRef = useRef(null);
   const searchRequestRef = useRef(0);
   const searchTimerRef = useRef(null);
@@ -154,6 +153,10 @@ export function MiConteo({ request }) {
   const lastSavedSnapshotRef = useRef('[]');
   const lastSavedItemsRef = useRef([]);
   const savingRef = useRef(false);
+  const scannerVideoRef = useRef(null);
+  const scannerStreamRef = useRef(null);
+  const scannerFrameRef = useRef(null);
+  const barcodeDetectorRef = useRef(null);
 
   const validItems = useMemo(() => items.filter((item) => Number(item.cantidad) > 0), [items]);
   const visibleItems = items.slice(0, MAX_VISIBLE_ITEMS);
@@ -173,7 +176,78 @@ export function MiConteo({ request }) {
     window.clearTimeout(searchTimerRef.current);
     window.clearInterval(autoSaveTimerRef.current);
     searchAbortRef.current?.abort();
+    stopScanner();
   }, []);
+
+  useEffect(() => {
+    if (!scannerOpen) return undefined;
+    let cancelled = false;
+
+    async function bootScanner() {
+      if (!window.isSecureContext) {
+        setScannerError('El escaner del navegador requiere HTTPS.');
+        return;
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setScannerError('Este navegador no permite abrir la camara.');
+        return;
+      }
+      if (!('BarcodeDetector' in window)) {
+        setScannerError('Este navegador no soporta escaneo nativo. Use la APK o escriba el codigo.');
+        return;
+      }
+
+      try {
+        const detector = new window.BarcodeDetector({
+          formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code']
+        });
+        barcodeDetectorRef.current = detector;
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        scannerStreamRef.current = stream;
+        const video = scannerVideoRef.current;
+        if (!video) return;
+        video.srcObject = stream;
+        await video.play();
+
+        const scanFrame = async () => {
+          if (cancelled || !barcodeDetectorRef.current || !scannerVideoRef.current) return;
+          try {
+            const detected = await barcodeDetectorRef.current.detect(scannerVideoRef.current);
+            const raw = detected?.[0]?.rawValue?.trim();
+            if (raw) {
+              closeScanner();
+              setQ(raw);
+              searchInputRef.current?.focus();
+              searchProducts(raw);
+              return;
+            }
+          } catch {
+            // el ciclo sigue intentando
+          }
+          scannerFrameRef.current = window.requestAnimationFrame(scanFrame);
+        };
+
+        scannerFrameRef.current = window.requestAnimationFrame(scanFrame);
+      } catch (err) {
+        setScannerError(err?.message || 'No se pudo abrir la camara.');
+      }
+    }
+
+    setScannerError('');
+    bootScanner();
+
+    return () => {
+      cancelled = true;
+      stopScanner();
+    };
+  }, [scannerOpen]);
 
   useEffect(() => {
     window.clearTimeout(searchTimerRef.current);
@@ -260,12 +334,7 @@ export function MiConteo({ request }) {
 
     const cached = getCachedSearch(cleanTerm);
     if (cached) {
-      const picked = pickSearchMatch(cached, cleanTerm);
-      if (picked) {
-        addProduct(picked);
-      } else {
-        setResults(cached);
-      }
+      setResults(cached);
       return;
     }
 
@@ -280,14 +349,9 @@ export function MiConteo({ request }) {
       if (requestId === searchRequestRef.current) {
         const productos = data.productos || [];
         setCachedSearch(cleanTerm, productos);
-        const picked = pickSearchMatch(productos, cleanTerm);
-        if (picked) {
-          addProduct(picked);
-        } else {
-          setResults(productos);
-          if (!productos.length) {
-            setWarning('No se encontraron productos para la busqueda realizada.');
-          }
+        setResults(productos);
+        if (!productos.length) {
+          setWarning('No se encontraron productos para la busqueda realizada.');
         }
       }
     } catch (err) {
@@ -317,6 +381,25 @@ export function MiConteo({ request }) {
     });
   }
 
+  function stopScanner() {
+    if (scannerFrameRef.current) {
+      window.cancelAnimationFrame(scannerFrameRef.current);
+      scannerFrameRef.current = null;
+    }
+    if (scannerStreamRef.current) {
+      scannerStreamRef.current.getTracks().forEach((track) => track.stop());
+      scannerStreamRef.current = null;
+    }
+    if (scannerVideoRef.current) {
+      scannerVideoRef.current.srcObject = null;
+    }
+  }
+
+  function closeScanner() {
+    stopScanner();
+    setScannerOpen(false);
+  }
+
   function addProduct(product) {
     setWarning('');
     setItems((current) => {
@@ -325,7 +408,12 @@ export function MiConteo({ request }) {
         setWarning('Producto ya estaba agregado. Actualice la cantidad.');
         return [existing, ...current.filter((item) => Number(item.producto_id) !== Number(product.id))];
       }
-      return [{ producto_id: product.id, codigo: product.codigo, descripcion: product.descripcion, cantidad: '' }, ...current];
+      return [{
+        producto_id: product.id,
+        codigo: product.codigo,
+        descripcion: clampCountDescription(product.descripcion),
+        cantidad: ''
+      }, ...current];
     });
     setHighlightedId(product.id);
     window.setTimeout(() => setHighlightedId(null), 1600);
@@ -335,11 +423,42 @@ export function MiConteo({ request }) {
   }
 
   function updateQty(productoId, cantidad) {
-    setItems((current) => current.map((item) => Number(item.producto_id) === Number(productoId) ? { ...item, cantidad } : item));
+    const normalized = String(cantidad ?? '').replace(',', '.');
+    if (!normalized) {
+      setItems((current) => current.map((item) => Number(item.producto_id) === Number(productoId) ? { ...item, cantidad: '' } : item));
+      return;
+    }
+    const numeric = Number(normalized);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      setItems((current) => current.map((item) => Number(item.producto_id) === Number(productoId) ? { ...item, cantidad: '' } : item));
+      return;
+    }
+    setItems((current) => current.map((item) => Number(item.producto_id) === Number(productoId) ? { ...item, cantidad: normalized } : item));
+  }
+
+  function handleQtyChange(productoId, rawValue) {
+    const cleaned = String(rawValue ?? '')
+      .replace(',', '.')
+      .replace(/[^0-9.]/g, '')
+      .replace(/^0+(?=\d)/, '');
+    const parts = cleaned.split('.');
+    const normalized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned;
+    updateQty(productoId, normalized);
   }
 
   function removeItem(productoId) {
     setItems((current) => current.filter((item) => Number(item.producto_id) !== Number(productoId)));
+  }
+
+  async function backToList() {
+    if (conteo && itemsSnapshot !== lastSavedSnapshotRef.current && validItems.length > 0 && !savingRef.current) {
+      await save(false, true);
+    }
+    setConteo(null);
+    setItems([]);
+    setResults([]);
+    setQ('');
+    await loadTomas();
   }
 
   async function save(finish = false, silent = false) {
@@ -442,13 +561,16 @@ export function MiConteo({ request }) {
         <div className="count-operation-card">
           <div className="operation-card-body">
             <div className="operation-info">
+              <button className="operation-back-btn" onClick={backToList} aria-label="Volver a conteos">
+                <ArrowLeft size={18} />
+              </button>
               <span className="operation-tag"><Circle size={10} fill="currentColor" /> OPERACION ACTIVA</span>
               <strong className="operation-title">{tomaTitle(conteo.numero_toma)}</strong>
               <span className="save-status">{saveStatus}</span>
               <div className="operation-meta">
-                <span><Building2 size={14} /> {conteo.agencia || '-'}</span>
-                <span><Calendar size={14} /> {tomaPeriodLabel(conteo, 'habilitacion')}</span>
-                <span><Calendar size={14} /> {tomaPeriodLabel(conteo, 'cierre')}</span>
+                <span>{conteo.agencia || '-'}</span>
+                <span>{tomaPeriodLabel(conteo, 'habilitacion')}</span>
+                <span>{tomaPeriodLabel(conteo, 'cierre')}</span>
               </div>
               <div className="operation-summary">
                 <span>{items.length} {items.length === 1 ? 'linea' : 'lineas'}</span>
@@ -471,39 +593,45 @@ export function MiConteo({ request }) {
 
         <div className="count-tool">
           <label htmlFor="mi-conteo-search">Buscar producto</label>
-          <div className="count-search-box">
-            <Search className="search-leading-icon" size={18} />
-            <input
-              id="mi-conteo-search"
-              ref={searchInputRef}
-              className="search-input"
-              placeholder="Codigo o descripcion"
-              value={q}
-              onChange={(event) => setQ(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  searchProducts(q);
-                }
-              }}
-            />
-            {q ? (
-              <button className="search-clear" onClick={clearSearch} aria-label="Limpiar busqueda">
-                <X size={17} />
-              </button>
-            ) : null}
+          <div className="count-search-row">
+            <div className="count-search-box">
+              <Search className="search-leading-icon" size={18} />
+              <input
+                id="mi-conteo-search"
+                ref={searchInputRef}
+                className="search-input"
+                placeholder="Codigo o descripcion"
+                value={q}
+                onChange={(event) => setQ(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    searchProducts(q);
+                  }
+                }}
+              />
+              {q ? (
+                <button className="search-clear" onClick={clearSearch} aria-label="Limpiar busqueda">
+                  <X size={17} />
+                </button>
+              ) : null}
 
-            {results.length > 0 ? (
-              <div className="search-results">
-                {results.map((product) => (
-                  <button className="search-result" key={product.id} onClick={() => addProduct(product)}>
-                    <span>{product.codigo}</span>
-                    <strong>{product.descripcion}</strong>
-                    <Plus size={16} />
-                  </button>
-                ))}
-              </div>
-            ) : null}
+              {results.length > 0 ? (
+                <div className="search-results">
+                  {results.map((product) => (
+                    <button className="search-result" key={product.id} onClick={() => addProduct(product)}>
+                      <span>{product.codigo}</span>
+                      <strong>{clampCountDescription(product.descripcion)}</strong>
+                      <Plus size={16} />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <button className="scan-trigger" onClick={() => setScannerOpen(true)} aria-label="Escanear codigo">
+              <QrCode size={18} />
+              <span>Escanear</span>
+            </button>
           </div>
         </div>
 
@@ -523,7 +651,7 @@ export function MiConteo({ request }) {
                 </button>
                 <div className="count-item-main">
                   <strong>{item.codigo}</strong>
-                  <span>{item.descripcion}</span>
+                  <span>{clampCountDescription(item.descripcion)}</span>
                 </div>
                 <div className="count-item-actions">
                   <input
@@ -533,11 +661,11 @@ export function MiConteo({ request }) {
                       else quantityRefs.current.delete(key);
                     }}
                     type="number"
-                    min="0"
+                    min="0.01"
                     step="0.01"
-                    placeholder="0"
+                    placeholder="0.01"
                     value={item.cantidad ?? ''}
-                    onChange={(event) => updateQty(item.producto_id, event.target.value)}
+                    onChange={(event) => handleQtyChange(item.producto_id, event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') searchInputRef.current?.focus();
                     }}
@@ -554,6 +682,24 @@ export function MiConteo({ request }) {
 
         <FeedbackToast message={message} error={error} warning={warning} onClose={() => { setMessage(''); setError(''); setWarning(''); }} />
       </section>
+
+      {scannerOpen ? (
+        <div className="scanner-modal" role="dialog" aria-modal="true" aria-label="Escaner de codigo">
+          <div className="scanner-panel">
+            <div className="scanner-header">
+              <strong>Escanear producto</strong>
+              <button className="search-clear" onClick={closeScanner} aria-label="Cerrar escaner">
+                <X size={18} />
+              </button>
+            </div>
+            <p>Apunte la camara al codigo. El producto quedara en resultados para que usted lo elija.</p>
+            <div className="scanner-viewport">
+              <video ref={scannerVideoRef} muted playsInline />
+            </div>
+            {scannerError ? <p className="scanner-error">{scannerError}</p> : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
