@@ -231,6 +231,13 @@ webApi.get('/mi/tomas', requireWebUser, requirePermission('count'), asyncHandler
      LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id AND c.estado = 'borrador'
      LEFT JOIN conteo_detalle d ON d.conteo_id = c.id
      WHERE tu.usuario_id = $1 AND t.estado = 'abierta' AND tu.estado != 'finalizado'
+       AND NOT EXISTS (
+         SELECT 1
+         FROM conteos cx
+         WHERE cx.toma_id = tu.toma_id
+           AND cx.usuario_id = tu.usuario_id
+           AND cx.estado = 'finalizado'
+       )
      GROUP BY t.id, t.numero_toma, t.nombre_toma, t.agencia, t.estado,
               t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin,
               tu.estado, c.id, c.estado, c.version, c.fecha_inicio, c.fecha_finalizacion
@@ -268,9 +275,17 @@ webApi.post('/mi/tomas/:id/iniciar', requireWebUser, requirePermission('count'),
     validateTomaWindow(toma);
 
     const current = await db.query(
-      "SELECT id, estado FROM conteos WHERE toma_id = $1 AND usuario_id = $2 AND estado = 'borrador' LIMIT 1",
+      'SELECT id, estado FROM conteos WHERE toma_id = $1 AND usuario_id = $2 LIMIT 1 FOR UPDATE',
       [tomaId, req.user.id]
     );
+    if (current.rows[0]?.estado === 'finalizado') {
+      await db.query(
+        "UPDATE toma_usuarios SET estado = 'finalizado' WHERE toma_id = $1 AND usuario_id = $2 AND estado != 'finalizado'",
+        [tomaId, req.user.id]
+      );
+      throw new AppError('Esta toma ya fue finalizada para este usuario. Recargue la lista.', 422);
+    }
+
     let id = current.rows[0]?.id;
     if (!id) {
       const created = await db.query(

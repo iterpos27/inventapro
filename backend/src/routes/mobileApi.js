@@ -99,6 +99,13 @@ mobileApi.get('/tomas', requireApiUser, asyncHandler(async (req, res) => {
      LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id AND c.estado = 'borrador'
      LEFT JOIN conteo_detalle cd ON cd.conteo_id = c.id
      WHERE tu.usuario_id = $1 AND t.estado = 'abierta' AND tu.estado != 'finalizado'
+       AND NOT EXISTS (
+         SELECT 1
+         FROM conteos cx
+         WHERE cx.toma_id = tu.toma_id
+           AND cx.usuario_id = tu.usuario_id
+           AND cx.estado = 'finalizado'
+       )
      GROUP BY t.id, tu.estado, c.id
      ORDER BY t.id DESC`,
     [req.user.id]
@@ -134,9 +141,17 @@ mobileApi.post('/iniciar_conteo', requireApiUser, asyncHandler(async (req, res) 
     validateTomaWindow(toma);
 
     const current = await db.query(
-      "SELECT id, estado FROM conteos WHERE toma_id = $1 AND usuario_id = $2 AND estado = 'borrador' LIMIT 1",
+      'SELECT id, estado FROM conteos WHERE toma_id = $1 AND usuario_id = $2 LIMIT 1 FOR UPDATE',
       [tomaId, req.user.id]
     );
+    if (current.rows[0]?.estado === 'finalizado') {
+      await db.query(
+        "UPDATE toma_usuarios SET estado = 'finalizado' WHERE toma_id = $1 AND usuario_id = $2 AND estado != 'finalizado'",
+        [tomaId, req.user.id]
+      );
+      throw new AppError('Esta toma ya fue finalizada para este usuario. Actualice la lista.', 422);
+    }
+
     let id = current.rows[0]?.id;
     if (!id) {
       const created = await db.query(
