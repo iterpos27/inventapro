@@ -2427,6 +2427,76 @@ th {
   color: #ffffff;
 }
 
+.live-count-modal {
+  display: grid;
+  gap: 14px;
+}
+
+.live-count-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.live-count-status {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.live-count-status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid #d6dee8;
+  border-radius: 999px;
+  background: #f8fbff;
+  color: #31577f;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.live-count-qty {
+  width: 90px;
+  min-height: 34px;
+  border: 1px solid #c9ddf2;
+  border-radius: 6px;
+  padding: 6px 8px;
+  text-align: center;
+  font-weight: 900;
+}
+
+.live-count-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.success-inline,
+.warning-inline,
+.error-inline {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.success-inline { color: #027a48; }
+.warning-inline { color: #b54708; }
+.error-inline { color: #b42318; }
+
+.compact-icon {
+  min-width: 34px;
+  min-height: 34px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+}
+
 @media (max-width: 980px) {
   .toma-detail-page .toma-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2614,16 +2684,17 @@ th {
 }
 
 .user-conteo-shell .scan-trigger {
+  width: 42px;
   min-height: 42px;
-  display: inline-flex;
+  display: inline-grid;
+  place-items: center;
   align-items: center;
   justify-content: center;
-  gap: 8px;
   border: 1px solid #bfd7ef;
   border-radius: 6px;
   background: #eef6ff;
   color: #1c4f82;
-  padding: 0 14px;
+  padding: 0;
   font-weight: 900;
 }
 
@@ -2821,7 +2892,7 @@ th {
   }
 
   .user-conteo-shell .scan-trigger {
-    width: 100%;
+    width: 48px;
     min-height: 46px;
   }
 

@@ -650,6 +650,83 @@ webApi.get('/tomas/:id', requireWebUser, requirePermission('reports'), asyncHand
   res.json({ ok: true, toma: toma.rows[0], participantes: participantes.rows, resumen });
 }));
 
+webApi.get('/tomas/:tomaId/conteos/:conteoId/live', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const tomaId = Number(req.params.tomaId || 0);
+  const conteoId = Number(req.params.conteoId || 0);
+  if (tomaId <= 0 || conteoId <= 0) {
+    throw new AppError('Conteo invalido', 422);
+  }
+
+  const detail = await pool.query(
+    `SELECT c.id, c.version, c.estado, c.toma_id, c.usuario_id, c.fecha_inicio, c.fecha_finalizacion,
+            t.numero_toma, t.estado AS toma_estado,
+            u.nombre, u.usuario
+     FROM conteos c
+     INNER JOIN tomas_fisicas t ON t.id = c.toma_id
+     INNER JOIN usuarios u ON u.id = c.usuario_id
+     WHERE c.id = $1 AND c.toma_id = $2
+     LIMIT 1`,
+    [conteoId, tomaId]
+  );
+  if (!detail.rows[0]) {
+    throw new AppError('Conteo no encontrado', 404);
+  }
+
+  const items = await pool.query(
+    `SELECT producto_id, codigo, descripcion, cantidad
+     FROM conteo_detalle
+     WHERE conteo_id = $1
+     ORDER BY codigo, descripcion`,
+    [conteoId]
+  );
+
+  res.json({
+    ok: true,
+    conteo: detail.rows[0],
+    items: items.rows
+  });
+}));
+
+webApi.put('/tomas/:tomaId/conteos/:conteoId/live', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const tomaId = Number(req.params.tomaId || 0);
+  const conteoId = Number(req.params.conteoId || 0);
+  const expectedVersion = Number(req.body.conteo_version || 0);
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  if (tomaId <= 0 || conteoId <= 0) {
+    throw new AppError('Conteo invalido', 422);
+  }
+
+  const result = await withTransaction(async (db) => {
+    const conteo = await db.query(
+      `SELECT c.id, c.version, c.estado, c.toma_id, c.usuario_id, t.estado AS toma_estado
+       FROM conteos c
+       INNER JOIN tomas_fisicas t ON t.id = c.toma_id
+       WHERE c.id = $1 AND c.toma_id = $2
+       LIMIT 1
+       FOR UPDATE`,
+      [conteoId, tomaId]
+    );
+    const current = conteo.rows[0];
+    if (!current) {
+      throw new AppError('Conteo no encontrado', 404);
+    }
+    if (current.estado === 'finalizado') {
+      throw new AppError('No se puede corregir un conteo finalizado', 422);
+    }
+    assertVersion(current, expectedVersion);
+
+    const lineas = await replaceDetalle(db, conteoId, items);
+    if (lineas === 0) {
+      throw new AppError('Debe mantener al menos una linea valida en el conteo', 422);
+    }
+    const version = await bumpVersion(db, conteoId);
+    await refreshTomaSummary(db, tomaId);
+    return { conteo_version: version, lineas };
+  });
+
+  res.json({ ok: true, ...result, message: 'Conteo actualizado en vivo' });
+}));
+
 webApi.patch('/tomas/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
   const tomaId = Number(req.params.id || 0);
   const fields = validateTomaPayload(req.body, { allowPastClosure: true });
@@ -1073,8 +1150,7 @@ async function searchActiveProducts(search, limit = 30, options = {}) {
     return rows;
   }
 
-  const codePrefix = `${escapeLike(q)}%`;
-  const contains = `%${escapeLike(q)}%`;
+  const patterns = buildSearchPatterns(q);
   const searchIsCode = /^\d+$/.test(q);
 
   if (searchIsCode) {
@@ -1096,15 +1172,21 @@ async function searchActiveProducts(search, limit = 30, options = {}) {
        WHERE estado = TRUE
          AND (
            codigo ILIKE $1 ESCAPE '\\'
+           OR codigo ILIKE $2 ESCAPE '\\'
            OR descripcion ILIKE $2 ESCAPE '\\'
            OR descripcion % $3
          )
        ORDER BY
-         CASE WHEN codigo ILIKE $1 ESCAPE '\\' THEN 0 ELSE 1 END,
+         CASE
+           WHEN codigo = $4 THEN 0
+           WHEN codigo ILIKE $1 ESCAPE '\\' THEN 1
+           WHEN codigo ILIKE $2 ESCAPE '\\' THEN 2
+           ELSE 3
+         END,
          similarity(descripcion, $3) DESC,
          codigo
-       LIMIT $4`,
-      [codePrefix, contains, q, safeLimit]
+       LIMIT $5`,
+      [patterns.prefixPattern, patterns.containsPattern, patterns.similarityTerm, q, safeLimit]
     );
     if (canUseCache) setCachedProductSearch(q, safeLimit, rows);
     return rows;
@@ -1116,16 +1198,22 @@ async function searchActiveProducts(search, limit = 30, options = {}) {
      WHERE estado = TRUE
        AND (
          codigo ILIKE $1 ESCAPE '\\'
+         OR codigo ILIKE $2 ESCAPE '\\'
          OR descripcion ILIKE $2 ESCAPE '\\'
          OR descripcion % $3
        )
      ORDER BY
-       CASE WHEN codigo ILIKE $1 ESCAPE '\\' THEN 0 ELSE 1 END,
+       CASE
+         WHEN codigo = $4 THEN 0
+         WHEN codigo ILIKE $1 ESCAPE '\\' THEN 1
+         WHEN codigo ILIKE $2 ESCAPE '\\' THEN 2
+         ELSE 3
+       END,
        similarity(descripcion, $3) DESC,
        descripcion,
        codigo
-    LIMIT $4`,
-    [codePrefix, contains, q, safeLimit]
+    LIMIT $5`,
+    [patterns.prefixPattern, patterns.containsPattern, patterns.similarityTerm, q, safeLimit]
   );
   if (canUseCache) setCachedProductSearch(q, safeLimit, rows);
   return rows;
@@ -1135,22 +1223,33 @@ function escapeLike(value) {
   return String(value).replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
+function buildSearchPatterns(search) {
+  const q = String(search || '').trim();
+  const hasWildcard = /[%_]/.test(q);
+  const wildcardPattern = hasWildcard
+    ? String(q).replace(/\\/g, '\\\\')
+    : '';
+  const prefixPattern = hasWildcard ? wildcardPattern : `${escapeLike(q)}%`;
+  const containsPattern = hasWildcard ? wildcardPattern : `%${escapeLike(q)}%`;
+  const similarityTerm = q.replace(/[%_]+/g, ' ').trim() || q;
+  return {
+    q,
+    hasWildcard,
+    prefixPattern,
+    containsPattern,
+    similarityTerm
+  };
+}
+
 function productSearchFilter(search) {
   const q = String(search || '').trim();
   if (!q) {
     return { where: 'estado = TRUE', params: [] };
   }
-  const codePrefix = `${escapeLike(q)}%`;
-  const contains = `%${escapeLike(q)}%`;
-  if (/^\d+$/.test(q)) {
-    return {
-      where: "(estado = TRUE AND (codigo ILIKE $1 ESCAPE '\\' OR descripcion ILIKE $2 ESCAPE '\\' OR descripcion % $3))",
-      params: [codePrefix, contains, q]
-    };
-  }
+  const patterns = buildSearchPatterns(q);
   return {
-    where: "(estado = TRUE AND (codigo ILIKE $1 ESCAPE '\\' OR descripcion ILIKE $2 ESCAPE '\\' OR descripcion % $3))",
-    params: [codePrefix, contains, q]
+    where: "(estado = TRUE AND (codigo ILIKE $1 ESCAPE '\\' OR codigo ILIKE $2 ESCAPE '\\' OR descripcion ILIKE $2 ESCAPE '\\' OR descripcion % $3))",
+    params: [patterns.prefixPattern, patterns.containsPattern, patterns.similarityTerm]
   };
 }
 

@@ -13,6 +13,7 @@ import {
 import { FeedbackToast } from '../components/FeedbackToast';
 import { IconAction } from '../components/IconAction';
 import { DataTable } from '../components/DataTable';
+import { LiveConteoModal } from '../components/LiveConteoModal';
 import { Modal } from '../components/Modal';
 import { downloadFile } from '../services/api';
 import {
@@ -34,6 +35,7 @@ export function Tomas({ request, token }) {
   const [error, setError] = useState('');
   const [form, setForm] = useState(defaultTomaForm());
   const [modalOpen, setModalOpen] = useState(false);
+  const [liveTarget, setLiveTarget] = useState(null);
 
   const load = () => request('/tomas').then((data) => setItems(data.tomas));
   const loadUsers = () => request('/usuarios').then((data) => setUsers(data.usuarios.filter((user) => ['usuario', 'operador'].includes(user.rol) && user.estado)));
@@ -290,25 +292,36 @@ export function Tomas({ request, token }) {
                     <td>{formatDateTime(participant.fecha_finalizacion)}</td>
                     <td>
                       <div className="text-actions">
-                        {participant.conteo_estado === 'finalizado' && participant.conteo_id ? (
+                        {participant.conteo_id ? (
                           <>
                             <button
-                              className="edit-text-btn success"
+                              className="outline-action compact"
                               type="button"
-                              title="Descargar Excel"
-                              onClick={() => downloadFile(token, `/conteos/${participant.conteo_id}/excel`).catch((err) => setError(err.message))}
+                              onClick={() => setLiveTarget(participant)}
                             >
-                              <FileDown size={14} />
-                              Descargar
+                              Ver en vivo
                             </button>
-                            <button
-                              className="toggle-text-btn"
-                              type="button"
-                              onClick={() => enableUser(participant.usuario_id)}
-                            >
-                              <RefreshCcw size={14} />
-                              Habilitar
-                            </button>
+                            {participant.conteo_estado === 'finalizado' ? (
+                              <>
+                                <button
+                                  className="edit-text-btn success"
+                                  type="button"
+                                  title="Descargar Excel"
+                                  onClick={() => downloadFile(token, `/conteos/${participant.conteo_id}/excel`).catch((err) => setError(err.message))}
+                                >
+                                  <FileDown size={14} />
+                                  Descargar
+                                </button>
+                                <button
+                                  className="toggle-text-btn"
+                                  type="button"
+                                  onClick={() => enableUser(participant.usuario_id)}
+                                >
+                                  <RefreshCcw size={14} />
+                                  Habilitar
+                                </button>
+                              </>
+                            ) : null}
                           </>
                         ) : (
                           <span className="muted">Pendiente</span>
@@ -331,6 +344,19 @@ export function Tomas({ request, token }) {
           <Modal title="Editar toma" onClose={() => setModalOpen(false)}>
             <TomaForm form={form} setForm={setForm} users={users} agencias={agencias} onSubmit={updateToma} submitLabel="Guardar cambios" />
           </Modal>
+        ) : null}
+        {liveTarget?.conteo_id ? (
+          <LiveConteoModal
+            request={request}
+            tomaId={selected.id}
+            conteoId={liveTarget.conteo_id}
+            participant={liveTarget}
+            onClose={async () => {
+              setLiveTarget(null);
+              await openDetail(selected.id);
+              await load();
+            }}
+          />
         ) : null}
       </div>
     );

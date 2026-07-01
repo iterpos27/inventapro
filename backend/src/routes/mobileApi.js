@@ -199,8 +199,7 @@ mobileApi.get('/productos', requireApiUser, asyncHandler(async (req, res) => {
     return;
   }
 
-  const codePrefix = `${escapeLike(q)}%`;
-  const contains = `%${escapeLike(q)}%`;
+  const patterns = buildSearchPatterns(q);
   let rows = [];
 
   if (/^\d+$/.test(q)) {
@@ -223,16 +222,22 @@ mobileApi.get('/productos', requireApiUser, asyncHandler(async (req, res) => {
        WHERE estado = TRUE
          AND (
            codigo ILIKE $1 ESCAPE '\\'
+           OR codigo ILIKE $2 ESCAPE '\\'
            OR descripcion ILIKE $2 ESCAPE '\\'
            OR descripcion % $3
          )
        ORDER BY
-         CASE WHEN codigo ILIKE $1 ESCAPE '\\' THEN 0 ELSE 1 END,
+         CASE
+           WHEN codigo = $4 THEN 0
+           WHEN codigo ILIKE $1 ESCAPE '\\' THEN 1
+           WHEN codigo ILIKE $2 ESCAPE '\\' THEN 2
+           ELSE 3
+         END,
          similarity(descripcion, $3) DESC,
          descripcion,
          codigo
        LIMIT 30`,
-      [codePrefix, contains, q]
+      [patterns.prefixPattern, patterns.containsPattern, patterns.similarityTerm, q]
     );
     rows = result.rows;
   }
@@ -329,4 +334,16 @@ async function saveConteo(userId, conteoId, expectedVersion, upsert, remove, rep
 
 function escapeLike(value) {
   return String(value).replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+function buildSearchPatterns(search) {
+  const q = String(search || '').trim();
+  const hasWildcard = /[%_]/.test(q);
+  const wildcardPattern = hasWildcard
+    ? String(q).replace(/\\/g, '\\\\')
+    : '';
+  const prefixPattern = hasWildcard ? wildcardPattern : `${escapeLike(q)}%`;
+  const containsPattern = hasWildcard ? wildcardPattern : `%${escapeLike(q)}%`;
+  const similarityTerm = q.replace(/[%_]+/g, ' ').trim() || q;
+  return { prefixPattern, containsPattern, similarityTerm };
 }

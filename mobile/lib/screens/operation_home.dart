@@ -128,7 +128,11 @@ class _OperationHomeState extends State<OperationHome>
         searchCtrl.clear();
         pendingSyncJob = syncJob;
         _hasUnsavedChanges = localDraft != null || syncJob != null;
-        saveStatus = _resolveSyncStatus(syncJob, localDraft != null);
+        saveStatus = _resolveSyncStatus(
+          syncJob,
+          localDraft != null,
+          syncJob?.items ?? localDraft?.items ?? detail.items,
+        );
       });
       _startPeriodicAutoSave();
       _scheduleDraftSync();
@@ -234,13 +238,13 @@ class _OperationHomeState extends State<OperationHome>
   }
 
   void _updateQty(int productoId, String value) {
-    final raw = value.trim().replaceAll(',', '.');
-    final qty = double.tryParse(raw);
+    final raw = value.trim();
+    final qty = int.tryParse(raw);
     setState(() {
       items = items
           .map(
             (item) => item.productoId == productoId
-                ? item.copyWith(cantidad: qty != null && qty > 0 ? qty : 0)
+                ? item.copyWith(cantidad: qty != null && qty >= 0 ? qty.toDouble() : item.cantidad)
                 : item,
           )
           .toList();
@@ -261,7 +265,17 @@ class _OperationHomeState extends State<OperationHome>
   }
 
   List<CountItem> get validItems =>
-      items.where((item) => item.cantidad > 0).toList();
+      items
+          .where(
+            (item) =>
+                item.cantidad > 0 &&
+                item.cantidad.truncateToDouble() == item.cantidad,
+          )
+          .toList();
+
+  bool get hasInvalidItems => items.any(
+    (item) => item.cantidad <= 0 || item.cantidad.truncateToDouble() != item.cantidad,
+  );
 
   Future<void> _persistLocalDraft() async {
     final current = conteo;
@@ -293,7 +307,11 @@ class _OperationHomeState extends State<OperationHome>
     if (_syncScheduled) {
       return;
     }
-    if (!_hasUnsavedChanges || conteo == null || validItems.isEmpty || saving) {
+    if (!_hasUnsavedChanges ||
+        conteo == null ||
+        validItems.isEmpty ||
+        hasInvalidItems ||
+        saving) {
       return;
     }
     _syncScheduled = true;
@@ -305,6 +323,7 @@ class _OperationHomeState extends State<OperationHome>
       if (_hasUnsavedChanges &&
           conteo != null &&
           validItems.isNotEmpty &&
+          !hasInvalidItems &&
           !saving) {
         await _saveDraft(silent: true);
       }
@@ -327,7 +346,25 @@ class _OperationHomeState extends State<OperationHome>
 
   Future<void> _saveDraft({bool silent = false}) async {
     final current = conteo;
-    if (current == null || validItems.isEmpty || saving) {
+    if (current == null || saving) {
+      return;
+    }
+    if (hasInvalidItems) {
+      setState(() {
+        saveStatus = 'Corrija o elimine productos con cantidad 0 o invalida.';
+      });
+      if (!silent) {
+        _toast(
+          'Hay productos con cantidad 0 o invalida. Corrijalos o elimínelos antes de guardar.',
+          isWarning: true,
+        );
+      }
+      return;
+    }
+    if (validItems.isEmpty) {
+      if (!silent) {
+        _toast('Agregue productos validos al conteo.', isWarning: true);
+      }
       return;
     }
     setState(() {
@@ -379,7 +416,21 @@ class _OperationHomeState extends State<OperationHome>
 
   Future<void> _finish() async {
     final current = conteo;
-    if (current == null || validItems.isEmpty || saving) {
+    if (current == null || saving) {
+      return;
+    }
+    if (hasInvalidItems) {
+      setState(() {
+        saveStatus = 'Corrija o elimine productos con cantidad 0 o invalida.';
+      });
+      _toast(
+        'Hay productos con cantidad 0 o invalida. Corrijalos o elimínelos antes de finalizar.',
+        isWarning: true,
+      );
+      return;
+    }
+    if (validItems.isEmpty) {
+      _toast('Agregue productos validos al conteo.', isWarning: true);
       return;
     }
     setState(() {
@@ -442,9 +493,19 @@ class _OperationHomeState extends State<OperationHome>
     return [cleanDate, cleanHour].where((part) => part.isNotEmpty).join(' ');
   }
 
-  String _resolveSyncStatus(SyncDraftJob? job, bool hasDraft) {
+  String _resolveSyncStatus(
+    SyncDraftJob? job,
+    bool hasDraft,
+    List<CountItem> sourceItems,
+  ) {
+    final hasInvalidSourceItems = sourceItems.any(
+      (item) => item.cantidad <= 0 || item.cantidad.truncateToDouble() != item.cantidad,
+    );
     if (job?.status == 'error') {
       return 'Borrador local con error de sincronizacion.';
+    }
+    if (hasInvalidSourceItems) {
+      return 'Corrija o elimine productos con cantidad 0 o invalida.';
     }
     if (job != null || hasDraft) {
       return 'Borrador local pendiente de sincronizar.';
@@ -789,10 +850,19 @@ class _OperationHomeState extends State<OperationHome>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  FilledButton.tonalIcon(
-                    onPressed: _openScanner,
-                    icon: const Icon(Icons.qr_code_scanner_outlined),
-                    label: const Text('Escanear'),
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: FilledButton.tonal(
+                      onPressed: _openScanner,
+                      style: FilledButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                      child: const Icon(Icons.qr_code_scanner_outlined),
+                    ),
                   ),
                 ],
               ),
@@ -919,7 +989,7 @@ class _OperationHomeState extends State<OperationHome>
                           focusNode: qtyFocus,
                           style: const TextStyle(fontSize: 13),
                           initialValue: item.cantidad <= 0
-                              ? ''
+                              ? '0'
                               : item.cantidad.toStringAsFixed(
                                   item.cantidad.truncateToDouble() ==
                                           item.cantidad
@@ -928,11 +998,11 @@ class _OperationHomeState extends State<OperationHome>
                                 ),
                           textAlign: TextAlign.center,
                           keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
+                            decimal: false,
                           ),
                           inputFormatters: [
                             FilteringTextInputFormatter.allow(
-                              RegExp(r'^\d*([.,]\d{0,2})?$'),
+                              RegExp(r'^\d*$'),
                             ),
                           ],
                           decoration: const InputDecoration(
@@ -940,7 +1010,7 @@ class _OperationHomeState extends State<OperationHome>
                               horizontal: 8,
                               vertical: 10,
                             ),
-                            hintText: '0.01',
+                            hintText: '0',
                           ),
                           onChanged: (value) =>
                               _updateQty(item.productoId, value),

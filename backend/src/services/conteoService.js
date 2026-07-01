@@ -285,7 +285,7 @@ function normalizeDetalleItems(items) {
   for (const item of Array.isArray(items) ? items : []) {
     const productoId = Number(item.producto_id || item.id || 0);
     const cantidad = Number(item.cantidad || 0);
-    if (productoId <= 0 || cantidad <= 0) {
+    if (productoId <= 0 || cantidad <= 0 || !Number.isInteger(cantidad)) {
       continue;
     }
     deduped.set(productoId, { productoId, cantidad });

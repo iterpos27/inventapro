@@ -10,6 +10,29 @@ class BarcodeScannerScreen extends StatefulWidget {
 
 class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   bool _handlingCode = false;
+  final MobileScannerController _controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    facing: CameraFacing.back,
+    torchEnabled: false,
+    formats: [
+      BarcodeFormat.qrCode,
+      BarcodeFormat.code128,
+      BarcodeFormat.code39,
+      BarcodeFormat.ean13,
+      BarcodeFormat.ean8,
+      BarcodeFormat.upcA,
+      BarcodeFormat.upcE,
+      BarcodeFormat.dataMatrix,
+      BarcodeFormat.pdf417,
+      BarcodeFormat.aztec,
+    ],
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   void _handleDetection(BarcodeCapture capture) {
     if (_handlingCode) {
@@ -21,6 +44,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         continue;
       }
       _handlingCode = true;
+      _controller.stop();
       Navigator.of(context).pop(raw);
       return;
     }
@@ -39,11 +63,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         fit: StackFit.expand,
         children: [
           MobileScanner(
-            controller: MobileScannerController(
-              detectionSpeed: DetectionSpeed.noDuplicates,
-              facing: CameraFacing.back,
-              torchEnabled: false,
-            ),
+            controller: _controller,
             onDetect: _handleDetection,
           ),
           Align(
@@ -53,7 +73,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               padding: const EdgeInsets.all(16),
               color: Colors.black.withValues(alpha: 0.62),
               child: const Text(
-                'Alinee el codigo dentro de la camara para agregar el producto.',
+                'Alinee el codigo QR o de barras dentro de la camara.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white, fontSize: 14),
               ),

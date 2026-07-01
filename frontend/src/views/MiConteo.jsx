@@ -79,6 +79,11 @@ function clampCountDescription(value) {
   return String(value || '').trim().slice(0, MAX_COUNT_DESCRIPTION);
 }
 
+function isPositiveInteger(value) {
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric > 0;
+}
+
 function savedSnapshot(items) {
   return JSON.stringify(items
     .filter((item) => Number(item.cantidad) > 0)
@@ -158,7 +163,11 @@ export function MiConteo({ request }) {
   const scannerFrameRef = useRef(null);
   const barcodeDetectorRef = useRef(null);
 
-  const validItems = useMemo(() => items.filter((item) => Number(item.cantidad) > 0), [items]);
+  const validItems = useMemo(() => items.filter((item) => isPositiveInteger(item.cantidad)), [items]);
+  const hasInvalidItems = useMemo(
+    () => items.some((item) => !isPositiveInteger(item.cantidad)),
+    [items]
+  );
   const visibleItems = items.slice(0, MAX_VISIBLE_ITEMS);
   const itemsSnapshot = useMemo(() => savedSnapshot(items), [items]);
   const totalUnits = useMemo(
@@ -269,13 +278,17 @@ export function MiConteo({ request }) {
       setSaveStatus('Sin cambios recientes.');
       return;
     }
+    if (items.length > 0 && hasInvalidItems) {
+      setSaveStatus('Corrija o elimine productos con cantidad 0 o invalida.');
+      return;
+    }
     if (validItems.length === 0) {
       setSaveStatus(items.length > 0 ? 'Pendiente de cantidades.' : 'Sin cambios recientes.');
       return;
     }
 
     setSaveStatus('Cambios pendientes...');
-  }, [conteo?.id, itemsSnapshot]);
+  }, [conteo?.id, itemsSnapshot, items.length, hasInvalidItems, validItems.length]);
 
   useEffect(() => {
     window.clearInterval(autoSaveTimerRef.current);
@@ -311,7 +324,10 @@ export function MiConteo({ request }) {
   async function loadConteo(conteoId) {
     try {
       const data = await request(`/mi/conteos/${conteoId}`);
-      const loadedItems = data.items.map((item) => ({ ...item, cantidad: String(Number(item.cantidad) || '') }));
+      const loadedItems = data.items.map((item) => ({
+        ...item,
+        cantidad: String(Number.isInteger(Number(item.cantidad)) ? Number(item.cantidad) : 0)
+      }));
       setConteo(data.conteo);
       setItems(loadedItems);
       lastSavedSnapshotRef.current = savedSnapshot(loadedItems);
@@ -412,7 +428,7 @@ export function MiConteo({ request }) {
         producto_id: product.id,
         codigo: product.codigo,
         descripcion: clampCountDescription(product.descripcion),
-        cantidad: ''
+        cantidad: '0'
       }, ...current];
     });
     setHighlightedId(product.id);
@@ -423,27 +439,23 @@ export function MiConteo({ request }) {
   }
 
   function updateQty(productoId, cantidad) {
-    const normalized = String(cantidad ?? '').replace(',', '.');
+    const normalized = String(cantidad ?? '').trim();
     if (!normalized) {
-      setItems((current) => current.map((item) => Number(item.producto_id) === Number(productoId) ? { ...item, cantidad: '' } : item));
+      setItems((current) => current.map((item) => Number(item.producto_id) === Number(productoId) ? { ...item, cantidad: '0' } : item));
       return;
     }
     const numeric = Number(normalized);
-    if (!Number.isFinite(numeric) || numeric <= 0) {
-      setItems((current) => current.map((item) => Number(item.producto_id) === Number(productoId) ? { ...item, cantidad: '' } : item));
+    if (!Number.isInteger(numeric) || numeric < 0) {
       return;
     }
-    setItems((current) => current.map((item) => Number(item.producto_id) === Number(productoId) ? { ...item, cantidad: normalized } : item));
+    setItems((current) => current.map((item) => Number(item.producto_id) === Number(productoId) ? { ...item, cantidad: String(numeric) } : item));
   }
 
   function handleQtyChange(productoId, rawValue) {
     const cleaned = String(rawValue ?? '')
-      .replace(',', '.')
-      .replace(/[^0-9.]/g, '')
+      .replace(/\D/g, '')
       .replace(/^0+(?=\d)/, '');
-    const parts = cleaned.split('.');
-    const normalized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned;
-    updateQty(productoId, normalized);
+    updateQty(productoId, cleaned || '0');
   }
 
   function removeItem(productoId) {
@@ -466,6 +478,11 @@ export function MiConteo({ request }) {
     setError('');
     if (!silent) setMessage('');
     if (!silent) setWarning('');
+    if (hasInvalidItems) {
+      setError('Hay productos con cantidad 0 o invalida. Corrijalos o elimínelos antes de guardar.');
+      setSaveStatus('Corrija o elimine productos con cantidad 0 o invalida.');
+      return;
+    }
     if (validItems.length === 0) {
       setError('Agregue productos validos al conteo');
       return;
@@ -516,6 +533,7 @@ export function MiConteo({ request }) {
     if (
       conteo &&
       !savingRef.current &&
+      !hasInvalidItems &&
       validItems.length > 0 &&
       itemsSnapshot !== lastSavedSnapshotRef.current
     ) {
@@ -630,7 +648,6 @@ export function MiConteo({ request }) {
             </div>
             <button className="scan-trigger" onClick={() => setScannerOpen(true)} aria-label="Escanear codigo">
               <QrCode size={18} />
-              <span>Escanear</span>
             </button>
           </div>
         </div>
@@ -661,9 +678,9 @@ export function MiConteo({ request }) {
                       else quantityRefs.current.delete(key);
                     }}
                     type="number"
-                    min="0.01"
-                    step="0.01"
-                    placeholder="0.01"
+                    min="0"
+                    step="1"
+                    placeholder="0"
                     value={item.cantidad ?? ''}
                     onChange={(event) => handleQtyChange(item.producto_id, event.target.value)}
                     onKeyDown={(event) => {

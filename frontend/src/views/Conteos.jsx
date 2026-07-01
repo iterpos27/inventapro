@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { ChevronLeft, Download, Edit3, FileDown, Power, RefreshCcw, Search, Trash2 } from 'lucide-react';
 import { FeedbackToast } from '../components/FeedbackToast';
+import { LiveConteoModal } from '../components/LiveConteoModal';
 import { Modal } from '../components/Modal';
 import { downloadFile } from '../services/api';
 import {
@@ -27,6 +28,7 @@ export function Conteos({ request, token, user }) {
   const [resumen, setResumen] = useState(null);
   const [form, setForm] = useState(defaultTomaForm());
   const [modalOpen, setModalOpen] = useState(false);
+  const [liveTarget, setLiveTarget] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const isAdmin = user?.rol === 'admin';
@@ -283,20 +285,31 @@ export function Conteos({ request, token, user }) {
                     <td>{formatDateTime(participant.fecha_finalizacion)}</td>
                     <td>
                       <div className="text-actions">
-                        {participant.conteo_estado === 'finalizado' && participant.conteo_id ? (
+                        {participant.conteo_id ? (
                           <>
                             <button
-                              className="edit-text-btn success"
+                              className="outline-action compact"
                               type="button"
-                              onClick={() => downloadFile(token, `/conteos/${participant.conteo_id}/excel`).catch((err) => setError(err.message))}
+                              onClick={() => setLiveTarget(participant)}
                             >
-                              <FileDown size={14} />
-                              Descargar
+                              Ver en vivo
                             </button>
-                            {isAdmin ? <button className="toggle-text-btn" type="button" onClick={() => enableUser(participant.usuario_id)}>
-                              <RefreshCcw size={14} />
-                              Habilitar
-                            </button> : null}
+                            {participant.conteo_estado === 'finalizado' ? (
+                              <>
+                                <button
+                                  className="edit-text-btn success"
+                                  type="button"
+                                  onClick={() => downloadFile(token, `/conteos/${participant.conteo_id}/excel`).catch((err) => setError(err.message))}
+                                >
+                                  <FileDown size={14} />
+                                  Descargar
+                                </button>
+                                {isAdmin ? <button className="toggle-text-btn" type="button" onClick={() => enableUser(participant.usuario_id)}>
+                                  <RefreshCcw size={14} />
+                                  Habilitar
+                                </button> : null}
+                              </>
+                            ) : null}
                           </>
                         ) : (
                           <span className="muted">Pendiente</span>
@@ -319,6 +332,19 @@ export function Conteos({ request, token, user }) {
           <Modal title="Editar toma" onClose={() => setModalOpen(false)}>
             <TomaForm form={form} setForm={setForm} users={users} agencias={agencias} onSubmit={updateToma} submitLabel="Guardar cambios" />
           </Modal>
+        ) : null}
+        {isAdmin && liveTarget?.conteo_id ? (
+          <LiveConteoModal
+            request={request}
+            tomaId={selected.id}
+            conteoId={liveTarget.conteo_id}
+            participant={liveTarget}
+            onClose={async () => {
+              setLiveTarget(null);
+              await openDetail(selected.id);
+              await refreshReports();
+            }}
+          />
         ) : null}
       </div>
     );

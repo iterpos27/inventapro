@@ -192,6 +192,7 @@ test('upsertDetalle agrupa productos y guarda en bloque para cargas grandes', as
       { producto_id: 10, cantidad: 5 },
       { producto_id: 11, cantidad: 3 },
       { producto_id: 10, cantidad: 7 },
+      { producto_id: 11, cantidad: 2.5 },
       { producto_id: 0, cantidad: 9 },
       { producto_id: 12, cantidad: 0 }
     ],
