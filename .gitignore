@@ -6,5 +6,5 @@ build/
 coverage/
 backend/storage/exports/
 backend/storage/imports/
+.codex-remote-attachments/
 *.log
-

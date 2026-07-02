@@ -13,15 +13,16 @@ jobs:
       - name: Check backup configuration
         id: config
         env:
+          ENABLE_DATABASE_BACKUP: ${{ secrets.ENABLE_DATABASE_BACKUP }}
           DATABASE_PUBLIC_URL: ${{ secrets.DATABASE_PUBLIC_URL }}
           BACKUP_ENCRYPTION_PASSWORD: ${{ secrets.BACKUP_ENCRYPTION_PASSWORD }}
         run: |
-          if [ -n "$DATABASE_PUBLIC_URL" ] && [ -n "$BACKUP_ENCRYPTION_PASSWORD" ]; then
+          if [ "$ENABLE_DATABASE_BACKUP" = "true" ] && [ -n "$DATABASE_PUBLIC_URL" ] && [ -n "$BACKUP_ENCRYPTION_PASSWORD" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
             echo "Backup configuration detected."
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Backup skipped: missing DATABASE_PUBLIC_URL or BACKUP_ENCRYPTION_PASSWORD."
+            echo "Backup skipped: define ENABLE_DATABASE_BACKUP=true and configure DATABASE_PUBLIC_URL + BACKUP_ENCRYPTION_PASSWORD."
           fi
 
       - name: Install PostgreSQL client

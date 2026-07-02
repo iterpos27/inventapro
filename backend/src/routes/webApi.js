@@ -734,9 +734,11 @@ webApi.put('/tomas/:tomaId/conteos/:conteoId/live', requireWebUser, requirePermi
 
   const result = await withTransaction(async (db) => {
     const conteo = await db.query(
-      `SELECT c.id, c.version, c.estado, c.toma_id, c.usuario_id, t.estado AS toma_estado
+      `SELECT c.id, c.version, c.estado, c.toma_id, c.usuario_id, t.estado AS toma_estado,
+              t.numero_toma, u.usuario AS usuario_codigo, u.nombre AS usuario_nombre
        FROM conteos c
        INNER JOIN tomas_fisicas t ON t.id = c.toma_id
+       INNER JOIN usuarios u ON u.id = c.usuario_id
        WHERE c.id = $1 AND c.toma_id = $2
        LIMIT 1
        FOR UPDATE`,
@@ -757,6 +759,23 @@ webApi.put('/tomas/:tomaId/conteos/:conteoId/live', requireWebUser, requirePermi
     }
     const version = await bumpVersion(db, conteoId);
     await refreshTomaSummary(db, tomaId);
+    await logAuditEvent(db, {
+      userId: req.user.id,
+      action: 'live_count_corrected',
+      entity: 'conteo',
+      entityId: conteoId,
+      details: {
+        toma_id: tomaId,
+        numero_toma: current.numero_toma,
+        usuario_id: current.usuario_id,
+        usuario: current.usuario_codigo,
+        usuario_nombre: current.usuario_nombre,
+        lineas,
+        version_anterior: Number(current.version || 0),
+        version_nueva: version
+      },
+      ip: req.ip
+    });
     return { conteo_version: version, lineas };
   });
 
@@ -849,7 +868,7 @@ webApi.post('/tomas/:id/estado', requireWebUser, requirePermission('admin'), asy
     throw new AppError('Accion invalida', 422);
   }
   const toma = await withTransaction(async (db) => {
-    const current = await db.query('SELECT id FROM tomas_fisicas WHERE id = $1 FOR UPDATE', [tomaId]);
+    const current = await db.query('SELECT id, numero_toma FROM tomas_fisicas WHERE id = $1 FOR UPDATE', [tomaId]);
     if (!current.rows[0]) {
       throw new AppError('Toma no encontrada', 404);
     }
@@ -875,6 +894,17 @@ webApi.post('/tomas/:id/estado', requireWebUser, requirePermission('admin'), asy
     }
     await refreshTomaSummary(db, tomaId);
     const updated = await db.query('SELECT * FROM tomas_fisicas WHERE id = $1', [tomaId]);
+    await logAuditEvent(db, {
+      userId: req.user.id,
+      action: accion === 'cerrar' ? 'manual_close' : 'manual_reopen',
+      entity: 'toma',
+      entityId: tomaId,
+      details: {
+        numero_toma: updated.rows[0]?.numero_toma || current.rows[0]?.numero_toma || null,
+        accion
+      },
+      ip: req.ip
+    });
     return updated.rows[0];
   });
   res.json({ ok: true, toma, message: accion === 'cerrar' ? 'Toma cerrada correctamente' : 'Toma reabierta correctamente' });
@@ -1127,6 +1157,25 @@ function publicUser(user) {
     usuario: user.usuario,
     rol: user.rol
   };
+}
+
+async function logAuditEvent(db, { userId = null, action, entity, entityId = null, details = null, ip = null }) {
+  try {
+    await db.query(
+      `INSERT INTO audit_logs (usuario_id, action, entity, entity_id, details, ip)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        userId ? Number(userId) : null,
+        String(action || '').trim(),
+        String(entity || '').trim(),
+        entityId ? Number(entityId) : null,
+        details ? JSON.stringify(details) : null,
+        ip || null
+      ]
+    );
+  } catch {
+    // La auditoria no debe bloquear la operacion principal.
+  }
 }
 
 async function listProducts({ q = '', page = 1, perPage = 30, sort = 'codigo', direction = 'asc' }) {

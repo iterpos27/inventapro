@@ -1,6 +1,12 @@
 # Respaldo y restauracion de PostgreSQL
 
 El workflow `PostgreSQL Backup` genera cada dia un `pg_dump` cifrado y permite ejecucion manual desde GitHub Actions.
+
+Solo se ejecuta realmente cuando existen estos secretos:
+
+- `ENABLE_DATABASE_BACKUP=true`
+- `DATABASE_PUBLIC_URL`
+- `BACKUP_ENCRYPTION_PASSWORD`
 Si los secretos no estan configurados, el workflow ahora se omite de forma segura y no debe fallar.
 
 ## Configuracion inicial

@@ -6,6 +6,15 @@ function eventLabel(item) {
   if (item.source === 'audit' && item.action === 'auto_close') {
     return 'Cierre automatico';
   }
+  if (item.source === 'audit' && item.action === 'manual_close') {
+    return 'Cierre manual';
+  }
+  if (item.source === 'audit' && item.action === 'manual_reopen') {
+    return 'Reapertura manual';
+  }
+  if (item.source === 'audit' && item.action === 'live_count_corrected') {
+    return 'Correccion en vivo';
+  }
   if (item.source === 'audit' && item.action) {
     return item.action.replaceAll('_', ' ');
   }
@@ -14,6 +23,12 @@ function eventLabel(item) {
 
 function eventSubLabel(item) {
   if (item.source === 'audit') {
+    if (item.action === 'live_count_corrected' && item.context?.usuario) {
+      return `usuario ${item.context.usuario}`;
+    }
+    if (item.entity === 'toma' && item.context?.numero_toma) {
+      return `toma #${item.context.numero_toma}`;
+    }
     if (item.entity && item.entity_id) {
       return `${item.entity} #${item.entity_id}`;
     }
@@ -26,6 +41,17 @@ function detailLabel(item) {
   if (item.context && typeof item.context === 'object') {
     if (item.context.reason === 'expired_window') {
       return 'Motivo: ventana vencida';
+    }
+    if (item.action === 'live_count_corrected') {
+      return [
+        item.context.numero_toma ? `Toma #${item.context.numero_toma}` : null,
+        item.context.usuario_nombre ? `Usuario: ${item.context.usuario_nombre}` : null,
+        item.context.lineas ? `Lineas: ${item.context.lineas}` : null,
+        item.context.version_nueva ? `Version: ${item.context.version_nueva}` : null
+      ].filter(Boolean).join(' | ');
+    }
+    if (item.action === 'manual_close' || item.action === 'manual_reopen') {
+      return item.context?.numero_toma ? `Toma #${item.context.numero_toma}` : 'Cambio manual de estado';
     }
     return Object.entries(item.context)
       .map(([key, value]) => `${key}: ${value}`)
@@ -101,7 +127,9 @@ export function Auditoria({ request }) {
                   <td><span className={`report-status ${item.source === 'audit' ? 'done' : 'open'}`}>{item.source}</span></td>
                   <td>
                     <strong>{eventLabel(item)}</strong>
-                    <span>{eventSubLabel(item)}</span>
+                    {eventSubLabel(item) && eventSubLabel(item) !== eventLabel(item) ? (
+                      <span>{eventSubLabel(item)}</span>
+                    ) : null}
                   </td>
                   <td>{item.usuario_nombre || '-'}</td>
                   <td>
