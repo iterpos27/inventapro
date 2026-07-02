@@ -291,7 +291,7 @@ export default function App() {
               <label>
                 Nueva contrasena
                 <div className="password-input-wrap">
-                  <input type={showNewPassword ? "text" : "password"} minLength="10" value={passwordForm.new_password} onChange={(event) => setPasswordForm({ ...passwordForm, new_password: event.target.value })} required />
+                  <input type={showNewPassword ? "text" : "password"} minLength="8" value={passwordForm.new_password} onChange={(event) => setPasswordForm({ ...passwordForm, new_password: event.target.value })} required />
                   <button type="button" className="toggle-password-btn" onClick={() => setShowNewPassword(!showNewPassword)} aria-label={showNewPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}>
                     {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -300,7 +300,7 @@ export default function App() {
               <label>
                 Confirmar contrasena
                 <div className="password-input-wrap">
-                  <input type={showConfirmPassword ? "text" : "password"} minLength="10" value={passwordForm.confirm_password} onChange={(event) => setPasswordForm({ ...passwordForm, confirm_password: event.target.value })} required />
+                  <input type={showConfirmPassword ? "text" : "password"} minLength="8" value={passwordForm.confirm_password} onChange={(event) => setPasswordForm({ ...passwordForm, confirm_password: event.target.value })} required />
                   <button type="button" className="toggle-password-btn" onClick={() => setShowConfirmPassword(!showConfirmPassword)} aria-label={showConfirmPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}>
                     {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>

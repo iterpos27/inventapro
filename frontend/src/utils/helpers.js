@@ -37,7 +37,18 @@ export function composeDateTime(date, time) {
 
 export function previewTomaNumber(date) {
   const year = String(date || new Date().getFullYear()).slice(0, 4);
-  return `${year}-000`;
+  return `${year}`;
+}
+
+export function currentDateInputValue() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+}
+
+export function currentTimeInputValue() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 }
 
 export function formatTomaTitle(numeroToma) {

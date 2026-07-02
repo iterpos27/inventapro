@@ -153,8 +153,8 @@ webApi.get('/auth/me', requireWebUser, asyncHandler(async (req, res) => {
 webApi.post('/auth/password', requireWebUser, asyncHandler(async (req, res) => {
   const currentPassword = String(req.body.current_password || '');
   const newPassword = String(req.body.new_password || '');
-  if (!currentPassword || newPassword.length < 10) {
-    throw new AppError('La nueva contrasena debe tener al menos 10 caracteres', 422);
+  if (!currentPassword || newPassword.length < 8) {
+    throw new AppError('La nueva contrasena debe tener al menos 8 caracteres', 422);
   }
   if (currentPassword === newPassword) {
     throw new AppError('La nueva contrasena debe ser diferente', 422);
@@ -508,8 +508,8 @@ webApi.patch('/usuarios/:id', requireWebUser, requirePermission('admin'), asyncH
   if (!nombre || !usuario) {
     throw new AppError('Complete los datos del usuario', 422);
   }
-  if (password && password.length < 10) {
-    throw new AppError('La contrasena debe tener al menos 10 caracteres', 422);
+  if (password && password.length < 8) {
+    throw new AppError('La contrasena debe tener al menos 8 caracteres', 422);
   }
 
   const params = [nombre, usuario, rol, estado, req.params.id];
@@ -565,7 +565,15 @@ webApi.get('/tomas', requireWebUser, requirePermission('reports'), asyncHandler(
 }));
 
 webApi.post('/tomas', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
-  const fields = validateTomaPayload(req.body);
+  const validated = validateTomaPayload(req.body);
+  const now = new Date();
+  const currentDate = now.toISOString().slice(0, 10);
+  const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const fields = {
+    ...validated,
+    fecha_habilitacion: currentDate,
+    hora_inicio: currentTime
+  };
   const usuarios = normalizeIds(req.body.usuarios);
   if (!usuarios.length) {
     throw new AppError('Seleccione al menos un usuario participante', 422);

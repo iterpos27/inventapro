@@ -21,7 +21,9 @@ import {
   formatShortPeriod,
   composeDateTime,
   previewTomaNumber,
-  formatDateTime
+  formatDateTime,
+  currentDateInputValue,
+  currentTimeInputValue
 } from '../utils/helpers';
 
 export function Tomas({ request, token }) {
@@ -584,6 +586,7 @@ export function TomaForm({ form, setForm, users, agencias = [], onSubmit, submit
           type={inline ? 'datetime-local' : 'date'}
           value={inline ? composeDateTime(form.fecha_habilitacion, form.hora_inicio) : form.fecha_habilitacion}
           onChange={(e) => inline ? updateDateTime('start', e.target.value) : setForm({ ...form, fecha_habilitacion: e.target.value })}
+          readOnly={inline}
         />
       </label>
       <label>
@@ -632,7 +635,7 @@ export function TomaForm({ form, setForm, users, agencias = [], onSubmit, submit
           </label>
         ))}
       </div>
-      <button className="primary toma-submit" type="submit">
+      <button className={`primary toma-submit ${inline ? 'compact-submit' : ''}`} type="submit">
         <Plus size={16} />
         {submitLabel}
       </button>
@@ -643,9 +646,9 @@ export function TomaForm({ form, setForm, users, agencias = [], onSubmit, submit
 export function defaultTomaForm() {
   return {
     agencia: '',
-    fecha_habilitacion: '',
+    fecha_habilitacion: currentDateInputValue(),
     fecha_cierre: '',
-    hora_inicio: '',
+    hora_inicio: currentTimeInputValue(),
     hora_fin: '',
     usuarios: []
   };

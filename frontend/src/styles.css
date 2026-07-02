@@ -1618,6 +1618,12 @@ th {
   grid-column: 1 / -1;
 }
 
+.inline-toma-form .compact-submit {
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
 .toma-preview {
   display: grid;
   gap: 4px;

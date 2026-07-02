@@ -3,8 +3,8 @@ import { config } from '../config.js';
 import { pool } from './pool.js';
 
 export async function seedAdmin() {
-  if (!config.seedAdminUser || config.seedAdminPassword.length < 12) {
-    console.log('Sin APP_SEED_ADMIN_USER o password menor a 12 caracteres. No se creo admin.');
+  if (!config.seedAdminUser || config.seedAdminPassword.length < 8) {
+    console.log('Sin APP_SEED_ADMIN_USER o password menor a 8 caracteres. No se creo admin.');
     return;
   }
 

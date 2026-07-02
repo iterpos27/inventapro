@@ -141,6 +141,7 @@ export function Usuarios({ request }) {
               <input
                 type="password"
                 placeholder={editing ? 'Dejar vacio para no cambiar' : ''}
+                minLength={editing ? 0 : 8}
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
               />
