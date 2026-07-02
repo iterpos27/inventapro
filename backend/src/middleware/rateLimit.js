@@ -26,12 +26,13 @@ if (process.env.REDIS_URL) {
   }
 }
 
-export function createRateLimiter({ windowMs, max, keyPrefix = 'global' }) {
+export function createRateLimiter({ windowMs, max, keyPrefix = 'global', keyBuilder = null }) {
   const hits = new Map();
 
   return async (req, res, next) => {
-    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
-    const key = `ratelimit:${keyPrefix}:${ip}`;
+    const fallbackIp = req.ip || req.connection?.remoteAddress || 'unknown';
+    const rawKey = typeof keyBuilder === 'function' ? keyBuilder(req) : fallbackIp;
+    const key = `ratelimit:${keyPrefix}:${rawKey || fallbackIp}`;
 
     // Si Redis está configurado y saludable, lo usamos para el entorno distribuido (Railway)
     if (redisClient && redisHealthy) {

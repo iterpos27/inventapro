@@ -327,18 +327,44 @@ export async function refreshTomaSummary(db, tomaId) {
        toma_id, usuarios_asignados, usuarios_finalizados, conteos_creados, conteos_con_detalle, unidades_contadas, updated_at
      )
      SELECT t.id,
-       COUNT(DISTINCT tu.usuario_id)::int,
-       COUNT(DISTINCT tu.usuario_id) FILTER (WHERE tu.estado = 'finalizado')::int,
-       COUNT(DISTINCT c.id)::int,
-       COUNT(DISTINCT c.id) FILTER (WHERE cd.id IS NOT NULL)::int,
-       COALESCE(SUM(cd.cantidad), 0),
+       COALESCE(tu.usuarios_asignados, 0)::int,
+       COALESCE(tu.usuarios_finalizados, 0)::int,
+       COALESCE(c.conteos_creados, 0)::int,
+       COALESCE(c.conteos_con_detalle, 0)::int,
+       COALESCE(cd.unidades_contadas, 0)::numeric,
        NOW()
      FROM tomas_fisicas t
-     LEFT JOIN toma_usuarios tu ON tu.toma_id = t.id
-     LEFT JOIN conteos c ON c.toma_id = t.id
-     LEFT JOIN conteo_detalle cd ON cd.conteo_id = c.id
+     LEFT JOIN (
+       SELECT toma_id,
+              COUNT(*)::int AS usuarios_asignados,
+              COUNT(*) FILTER (WHERE estado = 'finalizado')::int AS usuarios_finalizados
+       FROM toma_usuarios
+       WHERE toma_id = $1
+       GROUP BY toma_id
+     ) tu ON tu.toma_id = t.id
+     LEFT JOIN (
+       SELECT c.toma_id,
+              COUNT(*)::int AS conteos_creados,
+              COUNT(*) FILTER (
+                WHERE EXISTS (
+                  SELECT 1
+                  FROM conteo_detalle d
+                  WHERE d.conteo_id = c.id
+                )
+              )::int AS conteos_con_detalle
+       FROM conteos c
+       WHERE c.toma_id = $1
+       GROUP BY c.toma_id
+     ) c ON c.toma_id = t.id
+     LEFT JOIN (
+       SELECT c.toma_id,
+              COALESCE(SUM(d.cantidad), 0)::numeric AS unidades_contadas
+       FROM conteos c
+       INNER JOIN conteo_detalle d ON d.conteo_id = c.id
+       WHERE c.toma_id = $1
+       GROUP BY c.toma_id
+     ) cd ON cd.toma_id = t.id
      WHERE t.id = $1
-     GROUP BY t.id
      ON CONFLICT (toma_id) DO UPDATE SET
        usuarios_asignados = EXCLUDED.usuarios_asignados,
        usuarios_finalizados = EXCLUDED.usuarios_finalizados,

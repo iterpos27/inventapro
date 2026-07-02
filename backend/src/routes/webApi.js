@@ -1484,6 +1484,17 @@ async function saveWebConteo(userId, conteoId, expectedVersion, items, finish) {
       await db.query('UPDATE tomas_fisicas SET archivo_excel = NULL WHERE id = $1', [conteo.toma_id]);
       await closeTomaIfComplete(db, conteo.toma_id);
       await refreshTomaSummary(db, conteo.toma_id);
+      await logAuditEvent(db, {
+        userId,
+        action: 'count_finished',
+        entity: 'conteo',
+        entityId: conteoId,
+        details: {
+          toma_id: conteo.toma_id,
+          lineas,
+          version
+        }
+      });
     }
 
     return { ok: true, conteo_id: conteoId, conteo_version: version, lineas, estado: finish ? 'finalizado' : 'borrador' };

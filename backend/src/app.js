@@ -21,7 +21,16 @@ if (config.trustProxy) {
   app.set('trust proxy', 1);
 }
 
-const loginLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 20, keyPrefix: 'login' });
+const loginLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  keyPrefix: 'login',
+  keyBuilder: (req) => {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    const usuario = String(req.body?.usuario || '').trim().toLowerCase() || 'anonymous';
+    return `${ip}:${usuario}`;
+  }
+});
 const searchLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 180, keyPrefix: 'search' });
 const importLimiter = createRateLimiter({ windowMs: 60 * 60 * 1000, max: 6, keyPrefix: 'import' });
 
