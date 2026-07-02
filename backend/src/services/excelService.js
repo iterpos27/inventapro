@@ -37,7 +37,7 @@ export async function exportConteoExcel(conteoId, user, db = pool) {
   }
 
   const { rows } = await db.query(
-    `SELECT d.codigo, d.descripcion, d.cantidad, u.nombre AS usuario
+    `SELECT d.codigo, d.marca, d.descripcion, d.cantidad, u.nombre AS usuario
      FROM conteo_detalle d
      INNER JOIN conteos c ON c.id = d.conteo_id
      INNER JOIN usuarios u ON u.id = c.usuario_id
@@ -54,6 +54,7 @@ export async function exportConteoExcel(conteoId, user, db = pool) {
   const sheet = workbook.addWorksheet('Conteo');
   sheet.columns = [
     { header: 'Codigo', key: 'codigo', width: 18 },
+    { header: 'Marca', key: 'marca', width: 24 },
     { header: 'Descripcion', key: 'descripcion', width: 55 },
     { header: 'Cantidad', key: 'cantidad', width: 14 },
     { header: 'Usuario', key: 'usuario', width: 28 }
@@ -87,12 +88,12 @@ export async function generateConsolidadoExcel(tomaId, db = pool) {
   }
 
   const detallesResult = await db.query(
-    `SELECT d.producto_id, d.codigo, d.descripcion, c.usuario_id, SUM(d.cantidad)::numeric AS cantidad
+    `SELECT d.producto_id, d.codigo, d.marca, d.descripcion, c.usuario_id, SUM(d.cantidad)::numeric AS cantidad
      FROM conteos c
      INNER JOIN conteo_detalle d ON d.conteo_id = c.id
      WHERE c.toma_id = $1 AND c.estado = 'finalizado'
-     GROUP BY d.producto_id, d.codigo, d.descripcion, c.usuario_id
-     ORDER BY d.codigo, d.descripcion`,
+     GROUP BY d.producto_id, d.codigo, d.marca, d.descripcion, c.usuario_id
+     ORDER BY d.codigo, d.marca, d.descripcion`,
     [tomaId]
   );
   if (!detallesResult.rows.length) {
@@ -105,6 +106,7 @@ export async function generateConsolidadoExcel(tomaId, db = pool) {
     if (!productos.has(key)) {
       productos.set(key, {
         codigo: detalle.codigo,
+        marca: detalle.marca || '',
         descripcion: detalle.descripcion,
         usuarios: new Map(),
         total: 0
@@ -121,6 +123,7 @@ export async function generateConsolidadoExcel(tomaId, db = pool) {
   const sheet = workbook.addWorksheet('Consolidado');
   const columns = [
     { header: 'Codigo', key: 'codigo', width: 18 },
+    { header: 'Marca', key: 'marca', width: 24 },
     { header: 'Descripcion', key: 'descripcion', width: 55 },
     ...usuarios.map((usuario) => ({ header: excelSafeValue(usuario.nombre), key: `usuario_${usuario.id}`, width: 18 })),
     { header: 'Cantidad total', key: 'total', width: 18 }
@@ -130,6 +133,7 @@ export async function generateConsolidadoExcel(tomaId, db = pool) {
   for (const producto of productos.values()) {
     const row = {
       codigo: producto.codigo,
+      marca: producto.marca,
       descripcion: producto.descripcion,
       total: producto.total
     };
@@ -159,6 +163,7 @@ export async function importProductsFromFile(file, userId) {
       : await readXlsxHeaders(file.path);
     const { headers, totalRows } = headerInfo;
     const codigoCol = headers.codigo;
+    const marcaCol = headers.marca || 0;
     const descripcionCol = headers.descripcion;
     if (!codigoCol || !descripcionCol) {
       throw new AppError('Columnas requeridas no encontradas: codigo, descripcion', 422);
@@ -173,8 +178,8 @@ export async function importProductsFromFile(file, userId) {
         [userId, file.path, file.originalname, extension.slice(1), codigoCol, descripcionCol, totalRows]
       );
       const counters = extension === '.csv'
-        ? await importCsvProducts(db, file.path, codigoCol, descripcionCol)
-        : await importXlsxProducts(db, file.path, codigoCol, descripcionCol);
+        ? await importCsvProducts(db, file.path, codigoCol, marcaCol, descripcionCol)
+        : await importXlsxProducts(db, file.path, codigoCol, marcaCol, descripcionCol);
       await db.query(
         `UPDATE import_jobs
          SET current_row = $1, procesados = $2, insertados = $3, actualizados = $4, omitidos = $5,
@@ -184,7 +189,7 @@ export async function importProductsFromFile(file, userId) {
           counters.rowsRead + 2,
           counters.procesados,
           counters.insertados,
-          0,
+          counters.actualizados,
           counters.omitidos,
           job.rows[0].id
         ]
@@ -193,7 +198,7 @@ export async function importProductsFromFile(file, userId) {
         job_id: Number(job.rows[0].id),
         procesados: counters.procesados,
         insertados: counters.insertados,
-        actualizados: 0,
+        actualizados: counters.actualizados,
         omitidos: counters.omitidos
       };
     });
@@ -245,7 +250,7 @@ async function readXlsxHeaders(filePath) {
   throw new AppError('Archivo sin datos', 422);
 }
 
-async function importCsvProducts(db, filePath, codigoCol, descripcionCol) {
+async function importCsvProducts(db, filePath, codigoCol, marcaCol, descripcionCol) {
   const rl = readline.createInterface({ input: createReadStream(filePath), crlfDelay: Infinity });
   const counters = createImportCounters();
   const batch = [];
@@ -253,7 +258,7 @@ async function importCsvProducts(db, filePath, codigoCol, descripcionCol) {
     counters.rowsRead += 1;
     if (counters.rowsRead === 1) continue;
     const values = parseCsvLine(line);
-    addProductToBatch(values[codigoCol - 1], values[descripcionCol - 1], batch, counters);
+    addProductToBatch(values[codigoCol - 1], marcaCol ? values[marcaCol - 1] : '', values[descripcionCol - 1], batch, counters);
     if (batch.length >= 1000) {
       await flushProductImportBatch(db, batch, counters);
     }
@@ -263,7 +268,7 @@ async function importCsvProducts(db, filePath, codigoCol, descripcionCol) {
   return counters;
 }
 
-async function importXlsxProducts(db, filePath, codigoCol, descripcionCol) {
+async function importXlsxProducts(db, filePath, codigoCol, marcaCol, descripcionCol) {
   const counters = createImportCounters();
   const batch = [];
   const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(filePath, {
@@ -280,7 +285,13 @@ async function importXlsxProducts(db, filePath, codigoCol, descripcionCol) {
     for await (const row of worksheetReader) {
       if (row.number === 1) continue;
       counters.rowsRead += 1;
-      addProductToBatch(row.getCell(codigoCol).value, row.getCell(descripcionCol).value, batch, counters);
+      addProductToBatch(
+        row.getCell(codigoCol).value,
+        marcaCol ? row.getCell(marcaCol).value : '',
+        row.getCell(descripcionCol).value,
+        batch,
+        counters
+      );
       if (batch.length >= 1000) {
         await flushProductImportBatch(db, batch, counters);
       }
@@ -291,37 +302,53 @@ async function importXlsxProducts(db, filePath, codigoCol, descripcionCol) {
 }
 
 function createImportCounters() {
-  return { rowsRead: 0, procesados: 0, insertados: 0, omitidos: 0 };
+  return { rowsRead: 0, procesados: 0, insertados: 0, actualizados: 0, omitidos: 0 };
 }
 
-function addProductToBatch(codigoValue, descripcionValue, batch, counters) {
+function addProductToBatch(codigoValue, marcaValue, descripcionValue, batch, counters) {
   const codigo = normalizeProductCode(codigoValue);
+  const marca = normalizeCellText(marcaValue).slice(0, 120);
   const descripcion = normalizeCellText(descripcionValue);
   if (!codigo || !descripcion) {
     counters.omitidos += 1;
     return;
   }
   counters.procesados += 1;
-  batch.push({ codigo, descripcion });
+  batch.push({ codigo, marca, descripcion });
 }
 
 async function flushProductImportBatch(db, batch, counters) {
   if (!batch.length) return;
-  const codes = [];
-  const descriptions = [];
+  const uniqueProducts = new Map();
   for (const product of batch.splice(0)) {
+    uniqueProducts.set(product.codigo, product);
+  }
+  const codes = [];
+  const brands = [];
+  const descriptions = [];
+  for (const product of uniqueProducts.values()) {
     codes.push(product.codigo);
+    brands.push(product.marca || '');
     descriptions.push(product.descripcion);
   }
-  const result = await db.query(
-    `INSERT INTO productos (codigo, descripcion, estado)
-     SELECT codigo, descripcion, TRUE
-     FROM UNNEST($1::text[], $2::text[]) AS incoming(codigo, descripcion)
-     ON CONFLICT (codigo) DO NOTHING`,
-    [codes, descriptions]
+  const existing = await db.query(
+    'SELECT codigo FROM productos WHERE codigo = ANY($1::text[])',
+    [codes]
   );
-  counters.insertados += result.rowCount;
-  counters.omitidos += codes.length - result.rowCount;
+  const existingCodes = new Set(existing.rows.map((row) => String(row.codigo)));
+  const result = await db.query(
+    `INSERT INTO productos (codigo, marca, descripcion, estado)
+     SELECT codigo, marca, descripcion, TRUE
+     FROM UNNEST($1::text[], $2::text[], $3::text[]) AS incoming(codigo, marca, descripcion)
+     ON CONFLICT (codigo)
+     DO UPDATE SET
+       marca = EXCLUDED.marca,
+      descripcion = EXCLUDED.descripcion,
+      estado = TRUE`,
+    [codes, brands, descriptions]
+  );
+  counters.insertados += codes.filter((code) => !existingCodes.has(code)).length;
+  counters.actualizados += codes.filter((code) => existingCodes.has(code)).length;
 }
 
 function headersFromRow(row) {

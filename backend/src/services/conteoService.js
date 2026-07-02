@@ -238,13 +238,13 @@ export async function upsertDetalle(db, conteoId, upsert = [], remove = []) {
 
   const productIds = normalized.map((item) => item.productoId);
   const products = await db.query(
-    'SELECT id, codigo, descripcion FROM productos WHERE estado = TRUE AND id = ANY($1::bigint[])',
+    'SELECT id, codigo, marca, descripcion FROM productos WHERE estado = TRUE AND id = ANY($1::bigint[])',
     [productIds]
   );
   const productMap = new Map(
     products.rows.map((row) => [
       Number(row.id),
-      { codigo: row.codigo, descripcion: row.descripcion }
+      { codigo: row.codigo, marca: row.marca || '', descripcion: row.descripcion }
     ])
   );
 
@@ -256,25 +256,28 @@ export async function upsertDetalle(db, conteoId, upsert = [], remove = []) {
   const conteoIds = validItems.map(() => conteoId);
   const productoIds = validItems.map((item) => item.productoId);
   const codigos = validItems.map((item) => productMap.get(item.productoId).codigo);
+  const marcas = validItems.map((item) => productMap.get(item.productoId).marca || '');
   const descripciones = validItems.map((item) => productMap.get(item.productoId).descripcion);
   const cantidades = validItems.map((item) => item.cantidad);
 
   await db.query(
-    `INSERT INTO conteo_detalle (conteo_id, producto_id, codigo, descripcion, cantidad)
+    `INSERT INTO conteo_detalle (conteo_id, producto_id, codigo, marca, descripcion, cantidad)
      SELECT *
      FROM UNNEST(
        $1::bigint[],
        $2::bigint[],
        $3::text[],
        $4::text[],
-       $5::numeric[]
+       $5::text[],
+       $6::numeric[]
      )
      ON CONFLICT (conteo_id, producto_id)
      DO UPDATE SET
        cantidad = EXCLUDED.cantidad,
        codigo = EXCLUDED.codigo,
+       marca = EXCLUDED.marca,
        descripcion = EXCLUDED.descripcion`,
-    [conteoIds, productoIds, codigos, descripciones, cantidades]
+    [conteoIds, productoIds, codigos, marcas, descripciones, cantidades]
   );
 
   return validItems.length;

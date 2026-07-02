@@ -21,7 +21,7 @@ export function Productos({ request }) {
   const [totalPages, setTotalPages] = useState(1);
   const [sort, setSort] = useState('codigo');
   const [direction, setDirection] = useState('asc');
-  const [form, setForm] = useState({ codigo: '', descripcion: '' });
+  const [form, setForm] = useState({ codigo: '', marca: '', descripcion: '' });
   const [editing, setEditing] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [message, setMessage] = useState('');
@@ -101,7 +101,7 @@ export function Productos({ request }) {
 
   function editProduct(product) {
     setEditing(product);
-    setForm({ codigo: product.codigo || '', descripcion: product.descripcion || '' });
+    setForm({ codigo: product.codigo || '', marca: product.marca || '', descripcion: product.descripcion || '' });
     setModalOpen(true);
     setMessage('');
     setError('');
@@ -109,7 +109,7 @@ export function Productos({ request }) {
 
   function resetProductForm() {
     setEditing(null);
-    setForm({ codigo: '', descripcion: '' });
+    setForm({ codigo: '', marca: '', descripcion: '' });
     setModalOpen(false);
   }
 
@@ -148,7 +148,7 @@ export function Productos({ request }) {
           Buscar producto
           <div className="product-search-row">
             <input
-              placeholder="Codigo o descripcion"
+              placeholder="Codigo, marca o descripcion"
               value={q}
               onChange={(event) => setQ(event.target.value)}
               onKeyDown={(event) => event.key === 'Enter' && searchProducts()}
@@ -176,6 +176,12 @@ export function Productos({ request }) {
                   </button>
                 </th>
                 <th>
+                  <button className="sort-header" type="button" onClick={() => sortProducts('marca')}>
+                    Marca
+                    <ArrowUpDown size={14} />
+                  </button>
+                </th>
+                <th>
                   <button className="sort-header" type="button" onClick={() => sortProducts('descripcion')}>
                     Descripcion
                     <ArrowUpDown size={14} />
@@ -188,6 +194,7 @@ export function Productos({ request }) {
               {items.map((item) => (
                 <tr key={item.id}>
                   <td>{item.codigo}</td>
+                  <td>{item.marca || '-'}</td>
                   <td className="product-description" title={item.descripcion}>{truncateText(item.descripcion, 110)}</td>
                   <td>
                     <div className="text-actions">
@@ -205,7 +212,7 @@ export function Productos({ request }) {
               ))}
               {items.length === 0 ? (
                 <tr>
-                  <td className="empty-table" colSpan="3">No hay productos para mostrar.</td>
+                  <td className="empty-table" colSpan="4">No hay productos para mostrar.</td>
                 </tr>
               ) : null}
             </tbody>
@@ -232,6 +239,10 @@ export function Productos({ request }) {
             <label>
               Codigo
               <input value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} />
+            </label>
+            <label>
+              Marca
+              <input value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value.toUpperCase() })} />
             </label>
             <label>
               Descripcion

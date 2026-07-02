@@ -173,11 +173,11 @@ test('upsertDetalle agrupa productos y guarda en bloque para cargas grandes', as
   const mockDb = {
     query: async (sql, params = []) => {
       queries.push({ sql, params });
-      if (sql.includes('SELECT id, codigo, descripcion FROM productos')) {
+      if (sql.includes('SELECT id, codigo, marca, descripcion FROM productos')) {
         return {
           rows: [
-            { id: 10, codigo: 'P-10', descripcion: 'Producto 10' },
-            { id: 11, codigo: 'P-11', descripcion: 'Producto 11' }
+            { id: 10, codigo: 'P-10', marca: 'ACME', descripcion: 'Producto 10' },
+            { id: 11, codigo: 'P-11', marca: 'OEM', descripcion: 'Producto 11' }
           ]
         };
       }
@@ -203,9 +203,10 @@ test('upsertDetalle agrupa productos y guarda en bloque para cargas grandes', as
   assert.equal(queries.length, 3);
   assert.match(queries[0].sql, /DELETE FROM conteo_detalle/);
   assert.deepEqual(queries[0].params[1], [99, 100]);
-  assert.match(queries[1].sql, /SELECT id, codigo, descripcion FROM productos/);
+  assert.match(queries[1].sql, /SELECT id, codigo, marca, descripcion FROM productos/);
   assert.deepEqual(queries[1].params[0], [10, 11]);
   assert.match(queries[2].sql, /INSERT INTO conteo_detalle/);
   assert.deepEqual(queries[2].params[1], [10, 11]);
-  assert.deepEqual(queries[2].params[4], [7, 3]);
+  assert.deepEqual(queries[2].params[3], ['ACME', 'OEM']);
+  assert.deepEqual(queries[2].params[5], [7, 3]);
 });

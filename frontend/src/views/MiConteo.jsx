@@ -79,6 +79,10 @@ function clampCountDescription(value) {
   return String(value || '').trim().slice(0, MAX_COUNT_DESCRIPTION);
 }
 
+function clampBrand(value) {
+  return String(value || '').trim().slice(0, 40);
+}
+
 function isPositiveInteger(value) {
   const numeric = Number(value);
   return Number.isInteger(numeric) && numeric > 0;
@@ -87,51 +91,8 @@ function isPositiveInteger(value) {
 function savedSnapshot(items) {
   return JSON.stringify(items
     .filter((item) => Number(item.cantidad) > 0)
-    .map((item) => ({ producto_id: Number(item.producto_id), cantidad: Number(item.cantidad) })));
-}
-
-function normalizedSyncItems(items) {
-  return items
-    .map((item) => ({
-      producto_id: Number(item.producto_id),
-      cantidad: Number(item.cantidad || 0)
-    }))
-    .filter((item) => item.producto_id > 0)
-    .sort((a, b) => a.producto_id - b.producto_id);
-}
-
-function buildSyncPayload(currentItems, savedItems) {
-  const currentMap = new Map();
-  const savedMap = new Map();
-
-  normalizedSyncItems(currentItems).forEach((item) => {
-    currentMap.set(item.producto_id, item.cantidad);
-  });
-  normalizedSyncItems(savedItems).forEach((item) => {
-    savedMap.set(item.producto_id, item.cantidad);
-  });
-
-  const productIds = new Set([...currentMap.keys(), ...savedMap.keys()]);
-  const upsert = [];
-  const remove = [];
-
-  productIds.forEach((productoId) => {
-    const currentQty = currentMap.get(productoId) ?? 0;
-    const savedQty = savedMap.get(productoId) ?? 0;
-
-    if (currentQty <= 0 && savedQty <= 0) {
-      return;
-    }
-    if (currentQty <= 0 && savedQty > 0) {
-      remove.push({ producto_id: productoId });
-      return;
-    }
-    if (savedQty !== currentQty) {
-      upsert.push({ producto_id: productoId, cantidad: currentQty });
-    }
-  });
-
-  return { upsert, remove };
+    .map((item) => ({ producto_id: Number(item.producto_id), cantidad: Number(item.cantidad) }))
+    .sort((a, b) => a.producto_id - b.producto_id));
 }
 
 export function MiConteo({ request }) {
@@ -158,6 +119,8 @@ export function MiConteo({ request }) {
   const lastSavedSnapshotRef = useRef('[]');
   const lastSavedItemsRef = useRef([]);
   const savingRef = useRef(false);
+  const dirtyUpsertRef = useRef(new Map());
+  const dirtyRemoveRef = useRef(new Set());
   const scannerVideoRef = useRef(null);
   const scannerStreamRef = useRef(null);
   const scannerFrameRef = useRef(null);
@@ -169,11 +132,11 @@ export function MiConteo({ request }) {
     [items]
   );
   const visibleItems = items.slice(0, MAX_VISIBLE_ITEMS);
-  const itemsSnapshot = useMemo(() => savedSnapshot(items), [items]);
   const totalUnits = useMemo(
     () => validItems.reduce((sum, item) => sum + Number(item.cantidad || 0), 0),
     [validItems]
   );
+  const hasPendingDiffChanges = dirtyUpsertRef.current.size > 0 || dirtyRemoveRef.current.size > 0;
 
   const loadTomas = () => request('/mi/tomas').then((data) => setTomas(data.tomas));
 
@@ -274,7 +237,7 @@ export function MiConteo({ request }) {
 
   useEffect(() => {
     if (!conteo) return;
-    if (itemsSnapshot === lastSavedSnapshotRef.current) {
+    if (!hasPendingDiffChanges) {
       setSaveStatus('Sin cambios recientes.');
       return;
     }
@@ -288,7 +251,7 @@ export function MiConteo({ request }) {
     }
 
     setSaveStatus('Cambios pendientes...');
-  }, [conteo?.id, itemsSnapshot, items.length, hasInvalidItems, validItems.length]);
+  }, [conteo?.id, items.length, hasInvalidItems, validItems.length, hasPendingDiffChanges]);
 
   useEffect(() => {
     window.clearInterval(autoSaveTimerRef.current);
@@ -332,6 +295,8 @@ export function MiConteo({ request }) {
       setItems(loadedItems);
       lastSavedSnapshotRef.current = savedSnapshot(loadedItems);
       lastSavedItemsRef.current = loadedItems;
+      dirtyUpsertRef.current = new Map();
+      dirtyRemoveRef.current = new Set();
       setSaveStatus('Sin cambios recientes.');
       setResults([]);
       setQ('');
@@ -427,6 +392,7 @@ export function MiConteo({ request }) {
       return [{
         producto_id: product.id,
         codigo: product.codigo,
+        marca: product.marca || '',
         descripcion: clampCountDescription(product.descripcion),
         cantidad: '0'
       }, ...current];
@@ -442,6 +408,7 @@ export function MiConteo({ request }) {
     const normalized = String(cantidad ?? '').trim();
     if (!normalized) {
       setItems((current) => current.map((item) => Number(item.producto_id) === Number(productoId) ? { ...item, cantidad: '0' } : item));
+      markItemDirty(productoId, 0);
       return;
     }
     const numeric = Number(normalized);
@@ -449,6 +416,7 @@ export function MiConteo({ request }) {
       return;
     }
     setItems((current) => current.map((item) => Number(item.producto_id) === Number(productoId) ? { ...item, cantidad: String(numeric) } : item));
+    markItemDirty(productoId, numeric);
   }
 
   function handleQtyChange(productoId, rawValue) {
@@ -460,10 +428,55 @@ export function MiConteo({ request }) {
 
   function removeItem(productoId) {
     setItems((current) => current.filter((item) => Number(item.producto_id) !== Number(productoId)));
+    markItemRemoved(productoId);
+  }
+
+  function getSavedQuantity(productoId) {
+    const saved = lastSavedItemsRef.current.find((item) => Number(item.producto_id) === Number(productoId));
+    return Number(saved?.cantidad || 0);
+  }
+
+  function markItemDirty(productoId, cantidad) {
+    const productId = Number(productoId);
+    const numeric = Number(cantidad || 0);
+    const savedQty = getSavedQuantity(productId);
+    dirtyRemoveRef.current.delete(productId);
+    if (numeric <= 0) {
+      if (savedQty > 0) {
+        dirtyUpsertRef.current.delete(productId);
+        dirtyRemoveRef.current.add(productId);
+      } else {
+        dirtyUpsertRef.current.delete(productId);
+      }
+      return;
+    }
+    if (savedQty === numeric) {
+      dirtyUpsertRef.current.delete(productId);
+      return;
+    }
+    dirtyUpsertRef.current.set(productId, numeric);
+  }
+
+  function markItemRemoved(productoId) {
+    const productId = Number(productoId);
+    const savedQty = getSavedQuantity(productId);
+    dirtyUpsertRef.current.delete(productId);
+    if (savedQty > 0) {
+      dirtyRemoveRef.current.add(productId);
+    } else {
+      dirtyRemoveRef.current.delete(productId);
+    }
+  }
+
+  function buildDirtyPayload() {
+    return {
+      upsert: [...dirtyUpsertRef.current.entries()].map(([producto_id, cantidad]) => ({ producto_id, cantidad })),
+      remove: [...dirtyRemoveRef.current].map((producto_id) => ({ producto_id }))
+    };
   }
 
   async function backToList() {
-    if (conteo && itemsSnapshot !== lastSavedSnapshotRef.current && validItems.length > 0 && !savingRef.current) {
+    if (conteo && hasPendingDiffChanges && validItems.length > 0 && !savingRef.current) {
       await save(false, true);
     }
     setConteo(null);
@@ -490,7 +503,7 @@ export function MiConteo({ request }) {
 
     const payload = finish
       ? { conteo_version: conteo.version, items: validItems }
-      : buildSyncPayload(items, lastSavedItemsRef.current);
+      : buildDirtyPayload();
 
     if (!finish && payload.upsert.length === 0 && payload.remove.length === 0) {
       setSaveStatus('Sin cambios recientes.');
@@ -507,8 +520,10 @@ export function MiConteo({ request }) {
         body: JSON.stringify({ conteo_version: conteo.version, ...(finish ? payload : payload) })
       });
       setConteo((current) => current ? { ...current, version: data.conteo_version, estado: data.estado } : current);
-      lastSavedSnapshotRef.current = itemsSnapshot;
+      lastSavedSnapshotRef.current = savedSnapshot(items);
       lastSavedItemsRef.current = items;
+      dirtyUpsertRef.current = new Map();
+      dirtyRemoveRef.current = new Set();
       const savedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       setSaveStatus(finish ? 'Conteo finalizado.' : `Borrador guardado automaticamente a las ${savedAt}.`);
       if (!silent) setMessage(finish ? 'Conteo finalizado' : 'Borrador guardado');
@@ -535,7 +550,7 @@ export function MiConteo({ request }) {
       !savingRef.current &&
       !hasInvalidItems &&
       validItems.length > 0 &&
-      itemsSnapshot !== lastSavedSnapshotRef.current
+      hasPendingDiffChanges
     ) {
       save(false, true);
     }
@@ -639,7 +654,10 @@ export function MiConteo({ request }) {
                   {results.map((product) => (
                     <button className="search-result" key={product.id} onClick={() => addProduct(product)}>
                       <span>{product.codigo}</span>
-                      <strong>{clampCountDescription(product.descripcion)}</strong>
+                      <div className="search-result-meta">
+                        {product.marca ? <small>{clampBrand(product.marca)}</small> : null}
+                        <strong>{clampCountDescription(product.descripcion)}</strong>
+                      </div>
                       <Plus size={16} />
                     </button>
                   ))}
@@ -668,6 +686,7 @@ export function MiConteo({ request }) {
                 </button>
                 <div className="count-item-main">
                   <strong>{item.codigo}</strong>
+                  {item.marca ? <small>{clampBrand(item.marca)}</small> : null}
                   <span>{clampCountDescription(item.descripcion)}</span>
                 </div>
                 <div className="count-item-actions">

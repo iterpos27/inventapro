@@ -177,7 +177,10 @@ export function LiveConteoView({ request, tomaId, conteoId, participant, onBack,
             {items.map((item) => (
               <tr key={item.producto_id}>
                 <td><strong>{item.codigo}</strong></td>
-                <td title={item.descripcion}>{item.descripcion}</td>
+                <td title={item.descripcion}>
+                  {item.marca ? <small>{item.marca}</small> : null}
+                  <div>{item.descripcion}</div>
+                </td>
                 <td>
                   <input
                     className="live-count-qty"

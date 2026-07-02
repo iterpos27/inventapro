@@ -323,7 +323,7 @@ webApi.get('/mi/conteos/:id', requireWebUser, requirePermission('count'), asyncH
   if (!conteo.rows[0]) {
     throw new AppError('Conteo no disponible', 404);
   }
-  const items = await pool.query('SELECT producto_id, codigo, descripcion, cantidad FROM conteo_detalle WHERE conteo_id = $1 ORDER BY id', [conteoId]);
+  const items = await pool.query('SELECT producto_id, codigo, marca, descripcion, cantidad FROM conteo_detalle WHERE conteo_id = $1 ORDER BY id', [conteoId]);
   res.json({ ok: true, conteo: conteo.rows[0], items: items.rows });
 }));
 
@@ -379,7 +379,7 @@ webApi.get('/productos', requireWebUser, requirePermission('admin'), asyncHandle
   const q = String(req.query.q || '').trim();
   const page = Math.max(1, Number(req.query.page || 1));
   const perPage = Math.max(1, Math.min(Number(req.query.perPage || 30), 30));
-  const sort = ['codigo', 'descripcion'].includes(String(req.query.sort || '')) ? String(req.query.sort) : 'codigo';
+  const sort = ['codigo', 'marca', 'descripcion'].includes(String(req.query.sort || '')) ? String(req.query.sort) : 'codigo';
   const direction = String(req.query.direction || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc';
   const result = await listProducts({ q, page, perPage, sort, direction });
   res.json({ ok: true, ...result });
@@ -387,16 +387,17 @@ webApi.get('/productos', requireWebUser, requirePermission('admin'), asyncHandle
 
 webApi.post('/productos', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
   const codigo = String(req.body.codigo || '').trim();
+  const marca = String(req.body.marca || '').trim().toUpperCase();
   const descripcion = String(req.body.descripcion || '').trim();
   if (!codigo || !descripcion) {
     throw new AppError('Codigo y descripcion son requeridos', 422);
   }
   const { rows } = await pool.query(
-    `INSERT INTO productos (codigo, descripcion, estado)
-     VALUES ($1, $2, TRUE)
-     ON CONFLICT (codigo) DO UPDATE SET descripcion = EXCLUDED.descripcion, estado = TRUE
+    `INSERT INTO productos (codigo, marca, descripcion, estado)
+     VALUES ($1, $2, $3, TRUE)
+     ON CONFLICT (codigo) DO UPDATE SET marca = EXCLUDED.marca, descripcion = EXCLUDED.descripcion, estado = TRUE
      RETURNING *`,
-    [codigo, descripcion]
+    [codigo, marca, descripcion]
   );
   clearProductSearchCache();
   res.status(201).json({ ok: true, producto: rows[0] });
@@ -413,13 +414,14 @@ webApi.post('/productos/import', requireWebUser, requirePermission('admin'), upl
 
 webApi.patch('/productos/:id', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
   const codigo = String(req.body.codigo || '').trim();
+  const marca = String(req.body.marca || '').trim().toUpperCase();
   const descripcion = String(req.body.descripcion || '').trim();
   if (!codigo || !descripcion) {
     throw new AppError('Codigo y descripcion son requeridos', 422);
   }
   const { rows } = await pool.query(
-    'UPDATE productos SET codigo = $1, descripcion = $2, estado = $3 WHERE id = $4 RETURNING *',
-    [codigo, descripcion, Boolean(req.body.estado), req.params.id]
+    'UPDATE productos SET codigo = $1, marca = $2, descripcion = $3, estado = $4 WHERE id = $5 RETURNING *',
+    [codigo, marca, descripcion, Boolean(req.body.estado), req.params.id]
   );
   if (!rows[0]) {
     throw new AppError('Producto no encontrado', 404);
@@ -681,10 +683,10 @@ webApi.get('/tomas/:tomaId/conteos/:conteoId/live', requireWebUser, requirePermi
   }
 
   const items = await pool.query(
-    `SELECT producto_id, codigo, descripcion, cantidad
+    `SELECT producto_id, codigo, marca, descripcion, cantidad
      FROM conteo_detalle
      WHERE conteo_id = $1
-     ORDER BY codigo, descripcion`,
+     ORDER BY codigo, marca, descripcion`,
     [conteoId]
   );
 
@@ -1184,14 +1186,16 @@ async function listProducts({ q = '', page = 1, perPage = 30, sort = 'codigo', d
   const total = Number(count.rows[0]?.total || 0);
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const currentPage = Math.min(Math.max(1, page), totalPages);
-  const orderColumn = sort === 'descripcion' ? 'descripcion' : 'codigo';
+  const orderColumn = ['descripcion', 'marca'].includes(sort) ? sort : 'codigo';
   const orderDirection = direction === 'desc' ? 'DESC' : 'ASC';
   const orderClause = orderColumn === 'descripcion'
-    ? `descripcion ${orderDirection}, codigo ASC`
+    ? `descripcion ${orderDirection}, marca ASC, codigo ASC`
+    : orderColumn === 'marca'
+      ? `marca ${orderDirection}, descripcion ASC, codigo ASC`
     : `CASE WHEN codigo ~ '^\\d{1,30}$' THEN codigo::numeric END ${orderDirection} NULLS LAST, codigo ${orderDirection}`;
   const params = [...filter.params, perPage, (currentPage - 1) * perPage];
   const { rows } = await pool.query(
-    `SELECT id, codigo, descripcion, estado, fecha_creacion
+    `SELECT id, codigo, marca, descripcion, estado, fecha_creacion
      FROM productos
      WHERE ${filter.where}
      ORDER BY ${orderClause}, id ASC
@@ -1213,8 +1217,8 @@ async function searchActiveProducts(search, limit = 30, options = {}) {
   const q = String(search || '').trim();
   const safeLimit = Math.max(1, Math.min(Number(limit) || 30, 500));
   const select = options.includeMeta
-    ? 'id, codigo, descripcion, estado, fecha_creacion'
-    : 'id, codigo, descripcion';
+    ? 'id, codigo, marca, descripcion, estado, fecha_creacion'
+    : 'id, codigo, marca, descripcion';
   const canUseCache = !options.includeMeta && !options.includeEmpty;
 
   if (canUseCache) {
@@ -1258,8 +1262,10 @@ async function searchActiveProducts(search, limit = 30, options = {}) {
          AND (
            codigo ILIKE $1 ESCAPE '\\'
            OR codigo ILIKE $2 ESCAPE '\\'
+           OR marca ILIKE $2 ESCAPE '\\'
            OR descripcion ILIKE $2 ESCAPE '\\'
            OR descripcion % $3
+           OR marca % $3
          )
        ORDER BY
          CASE
@@ -1268,7 +1274,7 @@ async function searchActiveProducts(search, limit = 30, options = {}) {
            WHEN codigo ILIKE $2 ESCAPE '\\' THEN 2
            ELSE 3
          END,
-         similarity(descripcion, $3) DESC,
+         GREATEST(similarity(descripcion, $3), similarity(marca, $3)) DESC,
          codigo
        LIMIT $5`,
       [patterns.prefixPattern, patterns.containsPattern, patterns.similarityTerm, q, safeLimit]
@@ -1284,8 +1290,10 @@ async function searchActiveProducts(search, limit = 30, options = {}) {
        AND (
          codigo ILIKE $1 ESCAPE '\\'
          OR codigo ILIKE $2 ESCAPE '\\'
+         OR marca ILIKE $2 ESCAPE '\\'
          OR descripcion ILIKE $2 ESCAPE '\\'
          OR descripcion % $3
+         OR marca % $3
        )
      ORDER BY
        CASE
@@ -1294,7 +1302,8 @@ async function searchActiveProducts(search, limit = 30, options = {}) {
          WHEN codigo ILIKE $2 ESCAPE '\\' THEN 2
          ELSE 3
        END,
-       similarity(descripcion, $3) DESC,
+       GREATEST(similarity(descripcion, $3), similarity(marca, $3)) DESC,
+       marca,
        descripcion,
        codigo
     LIMIT $5`,
@@ -1333,7 +1342,7 @@ function productSearchFilter(search) {
   }
   const patterns = buildSearchPatterns(q);
   return {
-    where: "(estado = TRUE AND (codigo ILIKE $1 ESCAPE '\\' OR codigo ILIKE $2 ESCAPE '\\' OR descripcion ILIKE $2 ESCAPE '\\' OR descripcion % $3))",
+    where: "(estado = TRUE AND (codigo ILIKE $1 ESCAPE '\\' OR codigo ILIKE $2 ESCAPE '\\' OR marca ILIKE $2 ESCAPE '\\' OR descripcion ILIKE $2 ESCAPE '\\' OR descripcion % $3 OR marca % $3))",
     params: [patterns.prefixPattern, patterns.containsPattern, patterns.similarityTerm]
   };
 }

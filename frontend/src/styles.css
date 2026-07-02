@@ -1029,6 +1029,13 @@ h1 {
 }
 
 .products-table td:nth-child(2) {
+  width: 140px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475467;
+}
+
+.products-table td:nth-child(3) {
   font-size: 12px;
 }
 
@@ -2778,12 +2785,18 @@ th {
   text-align: left;
 }
 
+.user-conteo-shell .search-result-meta {
+  min-width: 0;
+  display: grid;
+}
+
 .user-conteo-shell .search-result:hover {
   background: #f4f8fd;
 }
 
 .user-conteo-shell .search-result span,
-.user-conteo-shell .search-result strong {
+.user-conteo-shell .search-result strong,
+.user-conteo-shell .search-result small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2799,6 +2812,12 @@ th {
   color: #111827;
   font-size: 12px;
   font-weight: 700;
+}
+
+.user-conteo-shell .search-result small {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .user-conteo-shell .count-list-heading {
@@ -2861,6 +2880,7 @@ th {
 }
 
 .user-conteo-shell .count-item-main strong,
+.user-conteo-shell .count-item-main small,
 .user-conteo-shell .count-item-main span {
   overflow-wrap: anywhere;
 }
@@ -2868,6 +2888,14 @@ th {
 .user-conteo-shell .count-item-main strong {
   color: #003a70;
   font-size: 12px;
+}
+
+.user-conteo-shell .count-item-main small {
+  display: block;
+  margin-top: 1px;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .user-conteo-shell .count-item-main span {
