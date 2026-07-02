@@ -20,7 +20,7 @@ import {
   formatPeriodDate,
   formatShortPeriod,
   composeDateTime,
-  previewTomaNumber,
+  nextTomaPreview,
   formatDateTime,
   currentDateInputValue,
   currentTimeInputValue
@@ -378,7 +378,7 @@ export function Tomas({ request, token }) {
 
       <section className="panel toma-create-panel">
         <h3>Crear toma fisica</h3>
-        <TomaForm form={form} setForm={setForm} users={users} agencias={agencias} onSubmit={createToma} submitLabel="Crear toma fisica" mode="inline" />
+        <TomaForm form={form} setForm={setForm} users={users} agencias={agencias} tomas={items} onSubmit={createToma} submitLabel="Crear toma fisica" mode="inline" />
       </section>
 
       <section className="panel users-card toma-table-card">
@@ -535,7 +535,7 @@ export function Tomas({ request, token }) {
   );
 }
 
-export function TomaForm({ form, setForm, users, agencias = [], onSubmit, submitLabel, mode = 'modal' }) {
+export function TomaForm({ form, setForm, users, agencias = [], tomas = [], onSubmit, submitLabel, mode = 'modal' }) {
   function toggleUser(id) {
     const value = String(id);
     setForm((current) => ({
@@ -558,13 +558,14 @@ export function TomaForm({ form, setForm, users, agencias = [], onSubmit, submit
       : { ...current, fecha_cierre: date, hora_fin: time });
   }
   const inline = mode === 'inline';
+  const previewNumber = nextTomaPreview(form.fecha_habilitacion, tomas);
 
   return (
     <form className={`toma-form ${inline ? 'inline-toma-form' : ''}`} onSubmit={onSubmit}>
       {inline ? (
         <label>
           Toma fisica #
-          <input value={previewTomaNumber(form.fecha_habilitacion)} readOnly />
+          <input value={previewNumber} readOnly />
         </label>
       ) : null}
       <label>
@@ -611,7 +612,7 @@ export function TomaForm({ form, setForm, users, agencias = [], onSubmit, submit
       ) : null}
       {inline ? (
         <div className="toma-preview">
-          <strong>TOMA FISICA # {previewTomaNumber(form.fecha_habilitacion)}</strong>
+          <strong>TOMA FISICA # {previewNumber}</strong>
           <span>AGENCIA: {form.agencia || ''}</span>
           <span>HABILITACION: {formatPeriodDate(form.fecha_habilitacion, form.hora_inicio)}</span>
           <span>FINALIZACION: {formatPeriodDate(form.fecha_cierre, form.hora_fin)}</span>
@@ -622,6 +623,10 @@ export function TomaForm({ form, setForm, users, agencias = [], onSubmit, submit
         <span>
           <button className="outline-action compact" type="button" onClick={selectAllUsers}>Todos</button>
           <button className="link-action compact" type="button" onClick={clearUsers}>Ninguno</button>
+          <button className="primary compact-inline-submit" type="submit">
+            <Plus size={15} />
+            Crear toma
+          </button>
         </span>
       </div>
       <div className={`user-picker ${inline ? 'wide' : ''}`}>
@@ -635,10 +640,12 @@ export function TomaForm({ form, setForm, users, agencias = [], onSubmit, submit
           </label>
         ))}
       </div>
-      <button className={`primary toma-submit ${inline ? 'compact-submit' : ''}`} type="submit">
-        <Plus size={16} />
-        {submitLabel}
-      </button>
+      {!inline ? (
+        <button className="primary toma-submit" type="submit">
+          <Plus size={16} />
+          {submitLabel}
+        </button>
+      ) : null}
     </form>
   );
 }

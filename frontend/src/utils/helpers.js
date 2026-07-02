@@ -40,6 +40,16 @@ export function previewTomaNumber(date) {
   return `${year}`;
 }
 
+export function nextTomaPreview(date, tomas = []) {
+  const year = String(date || new Date().getFullYear()).slice(0, 4);
+  const maxSequence = (Array.isArray(tomas) ? tomas : []).reduce((max, item) => {
+    const match = String(item?.numero_toma || '').match(/^(\d{4})-(\d{3})$/);
+    if (!match || match[1] !== year) return max;
+    return Math.max(max, Number(match[2] || 0));
+  }, 0);
+  return `${year}-${String(maxSequence + 1).padStart(3, '0')}`;
+}
+
 export function currentDateInputValue() {
   const now = new Date();
   const offset = now.getTimezoneOffset() * 60000;

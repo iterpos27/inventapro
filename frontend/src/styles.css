@@ -1624,6 +1624,16 @@ th {
   font-size: 13px;
 }
 
+.compact-inline-submit {
+  min-height: 34px;
+  padding: 6px 10px !important;
+  border-radius: 6px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .toma-preview {
   display: grid;
   gap: 4px;
