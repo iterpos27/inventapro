@@ -30,6 +30,11 @@ import {
 } from '../services/conteoService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/errors.js';
+import {
+  clearProductSearchCache,
+  getCachedProductSearch,
+  setCachedProductSearch
+} from '../utils/productCache.js';
 
 export const webApi = express.Router();
 await ensureStorage();
@@ -58,39 +63,8 @@ const brandingUpload = multer({
     callback(allowed ? null : new AppError('Formato no permitido para branding. Use png, jpg, svg, webp o ico', 422), allowed);
   }
 });
-const productSearchCache = new Map();
-const PRODUCT_SEARCH_CACHE_TTL_MS = 60 * 1000;
-const PRODUCT_SEARCH_CACHE_MAX = 300;
-
-function clearProductSearchCache() {
-  productSearchCache.clear();
-}
-
-function productSearchCacheKey(search, limit) {
-  return `${String(search || '').trim().replace(/\s+/g, ' ').toLowerCase()}::${limit}`;
-}
-
-function getCachedProductSearch(search, limit) {
-  const key = productSearchCacheKey(search, limit);
-  const cached = productSearchCache.get(key);
-  if (!cached) return null;
-  if (cached.expiresAt <= Date.now()) {
-    productSearchCache.delete(key);
-    return null;
-  }
-  return cached.rows;
-}
-
-function setCachedProductSearch(search, limit, rows) {
-  if (productSearchCache.size >= PRODUCT_SEARCH_CACHE_MAX) {
-    const oldestKey = productSearchCache.keys().next().value;
-    if (oldestKey) productSearchCache.delete(oldestKey);
-  }
-  productSearchCache.set(productSearchCacheKey(search, limit), {
-    rows,
-    expiresAt: Date.now() + PRODUCT_SEARCH_CACHE_TTL_MS
-  });
-}
+// Las funciones de caché de búsqueda de productos están en productCache.js
+// y son compartidas con mobileApi para coherencia y menor uso de memoria.
 
 webApi.post('/auth/login', asyncHandler(async (req, res) => {
   const usuario = String(req.body.usuario || '').trim();
@@ -216,9 +190,8 @@ webApi.get('/dashboard', requireWebUser, requirePermission('reports'), asyncHand
 }));
 
 webApi.get('/mi/tomas', requireWebUser, requirePermission('count'), asyncHandler(async (req, res) => {
-  closeExpiredTomas(pool).catch((err) => {
-    console.error('Error en segundo plano al cerrar tomas vencidas (webApi):', err);
-  });
+  // El cron de server.js cierra tomas vencidas cada 60s — no hay que hacerlo en cada request.
+  // Esto evitaba lock contention cuando 20-25 operadores listaban tomas simultáneamente.
   const { rows } = await pool.query(
     `SELECT t.id AS toma_id, t.numero_toma, t.nombre_toma, t.agencia, t.estado AS toma_estado,
             t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin,
@@ -259,13 +232,14 @@ webApi.post('/mi/tomas/:id/iniciar', requireWebUser, requirePermission('count'),
   }
 
   const conteoId = await withTransaction(async (db) => {
-    await closeExpiredTomas(db, tomaId);
+    // FOR UPDATE OF tu bloquea solo la fila del usuario (no la toma completa)
+    // para que los 20-25 operadores puedan iniciar sus conteos en paralelo.
     const tomaResult = await db.query(
       `SELECT t.id, t.nombre_toma, t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin
        FROM tomas_fisicas t
        INNER JOIN toma_usuarios tu ON tu.toma_id = t.id
        WHERE t.id = $1 AND tu.usuario_id = $2 AND t.estado = 'abierta' AND tu.estado != 'finalizado'
-       FOR UPDATE`,
+       FOR UPDATE OF tu`,
       [tomaId, req.user.id]
     );
     const toma = tomaResult.rows[0];
@@ -275,7 +249,7 @@ webApi.post('/mi/tomas/:id/iniciar', requireWebUser, requirePermission('count'),
     validateTomaWindow(toma);
 
     const current = await db.query(
-      'SELECT id, estado FROM conteos WHERE toma_id = $1 AND usuario_id = $2 LIMIT 1 FOR UPDATE',
+      'SELECT id, estado FROM conteos WHERE toma_id = $1 AND usuario_id = $2 LIMIT 1',
       [tomaId, req.user.id]
     );
     if (current.rows[0]?.estado === 'finalizado') {
@@ -743,7 +717,7 @@ webApi.put('/tomas/:tomaId/conteos/:conteoId/live', requireWebUser, requirePermi
        INNER JOIN usuarios u ON u.id = c.usuario_id
        WHERE c.id = $1 AND c.toma_id = $2
        LIMIT 1
-       FOR UPDATE`,
+       FOR UPDATE OF c`,
       [conteoId, tomaId]
     );
     const current = conteo.rows[0];

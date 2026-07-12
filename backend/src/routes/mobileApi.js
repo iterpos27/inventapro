@@ -10,7 +10,6 @@ import {
   activeDraftForUser,
   assertVersion,
   bumpVersion,
-  closeExpiredTomas,
   closeTomaIfComplete,
   listUserCountHistory,
   refreshTomaSummary,
@@ -18,6 +17,10 @@ import {
   upsertDetalle,
   validateTomaWindow
 } from '../services/conteoService.js';
+import {
+  getCachedProductSearch,
+  setCachedProductSearch
+} from '../utils/productCache.js';
 
 export const mobileApi = express.Router();
 
@@ -85,9 +88,8 @@ mobileApi.post('/logout', asyncHandler(async (req, res) => {
 }));
 
 mobileApi.get('/tomas', requireApiUser, asyncHandler(async (req, res) => {
-  closeExpiredTomas(pool).catch((err) => {
-    console.error('Error en segundo plano al cerrar tomas vencidas (mobileApi):', err);
-  });
+  // No llamamos closeExpiredTomas aquí: el cron de server.js ya lo hace cada minuto.
+  // Llamarlo aquí generaba lock contention en picos de 20-25 operadores conectándose al mismo tiempo.
   const { rows } = await pool.query(
     `SELECT t.id AS toma_id, t.numero_toma, t.nombre_toma, t.agencia, t.estado AS toma_estado,
             t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin,
@@ -125,13 +127,15 @@ mobileApi.post('/iniciar_conteo', requireApiUser, asyncHandler(async (req, res) 
   }
 
   const conteoId = await withTransaction(async (db) => {
-    await closeExpiredTomas(db, tomaId);
+    // Bloqueamos SOLO la fila del usuario en toma_usuarios (FOR UPDATE OF tu)
+    // para no bloquear la toma completa y permitir que otros operadores
+    // inicien sus conteos en paralelo sin esperas.
     const tomaResult = await db.query(
       `SELECT t.id, t.nombre_toma, t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin
        FROM tomas_fisicas t
        INNER JOIN toma_usuarios tu ON tu.toma_id = t.id
        WHERE t.id = $1 AND tu.usuario_id = $2 AND t.estado = 'abierta' AND tu.estado != 'finalizado'
-       FOR UPDATE`,
+       FOR UPDATE OF tu`,
       [tomaId, req.user.id]
     );
     const toma = tomaResult.rows[0];
@@ -141,7 +145,7 @@ mobileApi.post('/iniciar_conteo', requireApiUser, asyncHandler(async (req, res) 
     validateTomaWindow(toma);
 
     const current = await db.query(
-      'SELECT id, estado FROM conteos WHERE toma_id = $1 AND usuario_id = $2 LIMIT 1 FOR UPDATE',
+      'SELECT id, estado FROM conteos WHERE toma_id = $1 AND usuario_id = $2 LIMIT 1',
       [tomaId, req.user.id]
     );
     if (current.rows[0]?.estado === 'finalizado') {
@@ -199,32 +203,41 @@ mobileApi.get('/productos', requireApiUser, asyncHandler(async (req, res) => {
     return;
   }
 
+  // Revisar caché en memoria antes de consultar la BD
+  const cached = getCachedProductSearch(q, 30);
+  if (cached) {
+    res.json({ ok: true, productos: cached });
+    return;
+  }
+
   const patterns = buildSearchPatterns(q);
   let rows = [];
 
-  if (/^\d+$/.test(q)) {
-    const exact = await pool.query(
-      `SELECT id, codigo, descripcion
-       FROM productos
-       WHERE estado = TRUE AND codigo = $1
-       LIMIT 1`,
-      [q]
-    );
-    if (exact.rows.length) {
-      rows = exact.rows;
-    }
+  // SIEMPRE intentamos coincidencia exacta por código primero
+  // (aplica tanto para códigos numéricos como alfanuméricos, ej. PROD-001)
+  const exact = await pool.query(
+    `SELECT id, codigo, marca, descripcion
+     FROM productos
+     WHERE estado = TRUE AND codigo = $1
+     LIMIT 1`,
+    [q]
+  );
+  if (exact.rows.length) {
+    rows = exact.rows;
   }
 
   if (!rows.length) {
     const result = await pool.query(
-      `SELECT id, codigo, descripcion
+      `SELECT id, codigo, marca, descripcion
        FROM productos
        WHERE estado = TRUE
          AND (
            codigo ILIKE $1 ESCAPE '\\'
            OR codigo ILIKE $2 ESCAPE '\\'
+           OR marca ILIKE $2 ESCAPE '\\'
            OR descripcion ILIKE $2 ESCAPE '\\'
            OR descripcion % $3
+           OR marca % $3
          )
        ORDER BY
          CASE
@@ -233,7 +246,7 @@ mobileApi.get('/productos', requireApiUser, asyncHandler(async (req, res) => {
            WHEN codigo ILIKE $2 ESCAPE '\\' THEN 2
            ELSE 3
          END,
-         similarity(descripcion, $3) DESC,
+         GREATEST(similarity(descripcion, $3), similarity(marca, $3)) DESC,
          descripcion,
          codigo
        LIMIT 30`,
@@ -241,6 +254,8 @@ mobileApi.get('/productos', requireApiUser, asyncHandler(async (req, res) => {
     );
     rows = result.rows;
   }
+
+  setCachedProductSearch(q, 30, rows);
   res.json({ ok: true, productos: rows });
 }));
 
@@ -309,8 +324,11 @@ mobileApi.get('/conteos/:id/excel', requireApiUser, asyncHandler(async (req, res
   if (conteoId <= 0) {
     throw new AppError('Conteo invalido', 422);
   }
-  const file = await exportConteoExcel(conteoId, req.user);
-  res.download(file.fullPath, file.filename);
+  // exportConteoExcel retorna { buffer, filename } — enviamos el buffer correctamente.
+  const { buffer, filename } = await exportConteoExcel(conteoId, req.user);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buffer);
 }));
 
 async function saveConteo(userId, conteoId, expectedVersion, upsert, remove, replace) {

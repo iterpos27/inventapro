@@ -1,5 +1,4 @@
 import { AppError } from '../utils/errors.js';
-import { exportConteoExcel } from '../services/excelService.js';
 import { pool } from '../db/pool.js';
 
 export async function closeExpiredTomas(db, tomaId = null) {
@@ -56,12 +55,8 @@ export async function closeExpiredTomas(db, tomaId = null) {
         );
 
         for (const conteo of borradores.rows) {
-          try {
-            // Generar Excel si es posible (no bloquea el cierre si falla)
-            await exportConteoExcel(Number(conteo.id), { id: conteo.usuario_id, rol: 'usuario' }, client);
-          } catch (_) {
-            // No crítico: continuar cerrando aunque falle la exportación
-          }
+          // Finalizamos el conteo y la asignación. El Excel se genera al vuelo
+          // cuando el usuario lo descarga, no aquí (evitamos trabajo innecesario).
           await client.query(
             "UPDATE conteos SET estado = 'finalizado', fecha_finalizacion = COALESCE(fecha_finalizacion, NOW()), updated_at = NOW() WHERE id = $1",
             [conteo.id]
@@ -189,7 +184,10 @@ export function validateTomaWindow(toma) {
 }
 
 export async function activeDraftForUser(db, conteoId, usuarioId, lock = false) {
-  const lockSql = lock ? ' FOR UPDATE' : '';
+  // Usamos FOR UPDATE OF c, tu para bloquear SÓLO las filas del usuario,
+  // sin bloquear la fila compartida de tomas_fisicas. Esto permite que
+  // 20-25 operadores guarden sus conteos en paralelo sin bloquearse.
+  const lockSql = lock ? ' FOR UPDATE OF c, tu' : '';
   const { rows } = await db.query(
     `SELECT c.id, c.toma_id, c.version, t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin
      FROM conteos c

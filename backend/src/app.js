@@ -31,7 +31,20 @@ const loginLimiter = createRateLimiter({
     return `${ip}:${usuario}`;
   }
 });
-const searchLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 180, keyPrefix: 'search' });
+// El searchLimiter usa el token de autenticación como clave cuando está disponible.
+// Esto evita que 20-25 operadores en la misma red Wi-Fi de bodega sean bloqueados
+// juntos al compartir una sola IP pública. Cada operador tiene su propio límite.
+const searchLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 300,
+  keyPrefix: 'search',
+  keyBuilder: (req) => {
+    const header = req.headers.authorization || '';
+    const token = header.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+    if (token) return `token:${token.slice(0, 40)}`;
+    return req.ip || req.connection?.remoteAddress || 'unknown';
+  }
+});
 const importLimiter = createRateLimiter({ windowMs: 60 * 60 * 1000, max: 6, keyPrefix: 'import' });
 
 app.use(helmet());
