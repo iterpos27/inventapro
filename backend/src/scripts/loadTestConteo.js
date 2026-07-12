@@ -196,6 +196,12 @@ async function runPhase(label, workers) {
   };
 }
 
+function assertPhasePassed(phase) {
+  if (phase.failed > 0 || phase.success === 0) {
+    throw new Error(`${phase.label} fallo: ${phase.success}/${USER_COUNT} exitos, ${phase.failed} fallos. ${phase.errors.slice(0, 3).join(' | ')}`);
+  }
+}
+
 async function main() {
   const scenario = await prepareScenario();
   const server = app.listen(0, '127.0.0.1');
@@ -221,6 +227,7 @@ async function main() {
         return { duration };
       })
     );
+    assertPhasePassed(loginPhase);
 
     const startPhase = await runPhase(
       'start',
@@ -238,6 +245,7 @@ async function main() {
         return { duration };
       })
     );
+    assertPhasePassed(startPhase);
 
     const bulkSavePhase = await runPhase(
       'bulk_draft_save_600',
@@ -255,6 +263,7 @@ async function main() {
         })
       }))
     );
+    assertPhasePassed(bulkSavePhase);
 
     const secondSavePhase = await runPhase(
       'differential_save_90_changes',
@@ -272,6 +281,7 @@ async function main() {
         })
       }))
     );
+    assertPhasePassed(secondSavePhase);
 
     const finalItems = fullItems
       .filter((item, index) => index < 60 || index >= 90)
@@ -292,6 +302,7 @@ async function main() {
         })
       }))
     );
+    assertPhasePassed(finishPhase);
 
     const lineCount = await pool.query(
       `SELECT COUNT(*)::int AS total

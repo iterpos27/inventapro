@@ -2,9 +2,9 @@
 
 Escenario revisado:
 
-- 50 usuarios concurrentes entrando a Inventapro.
+- 20 a 25 usuarios concurrentes entrando a Inventapro.
 - 1 toma con hasta 500 productos por conteo.
-- Guardado periodico de borradores y finalizacion de conteos desde web y APK.
+- Guardado periodico de borradores y finalizacion de conteos desde web y web movil.
 
 ## Base del analisis
 
@@ -28,7 +28,28 @@ Ahora el backend guarda en bloque:
 
 Esto reduce drasticamente la cantidad de round-trips a base de datos por guardado.
 
-## Comportamiento esperado con 50 usuarios y 500 productos
+## Validacion local web/web movil
+
+Ultima corrida local:
+
+- comando: `npm run loadtest:web`;
+- usuarios concurrentes: 25;
+- productos por usuario: 600;
+- lineas finales registradas: 14250 de 14250 esperadas;
+- conteos finalizados: 25 de 25;
+- fallos: 0.
+
+Tiempos observados:
+
+- login: p95 6004.5 ms;
+- iniciar conteo: p95 384.3 ms;
+- guardado inicial de 600 lineas: p95 1148.3 ms;
+- guardado diferencial de 90 cambios: p95 351.0 ms;
+- finalizacion de 570 lineas: p95 1740.7 ms.
+
+La prueba usa los endpoints reales de `/api/admin`, crea datos temporales y los limpia al terminar.
+
+## Comportamiento esperado con 20-25 usuarios y 500 productos
 
 ### 1. Inicio de sesion y carga de tomas
 
@@ -70,8 +91,8 @@ Motivo:
 
 Riesgo principal:
 
-- el flujo de web y APK sigue enviando el estado completo del conteo cuando se usa reemplazo total del detalle;
-- si 50 usuarios guardan casi al mismo tiempo, la carga pasa de ser "muchas consultas pequenas" a "menos consultas, pero con payloads grandes".
+- la finalizacion sigue enviando el estado completo del conteo;
+- si 25 usuarios finalizan casi al mismo tiempo, la carga pasa de ser "muchas consultas pequenas" a "menos consultas, pero con payloads grandes".
 
 ### 4. Finalizacion de conteo
 
@@ -91,20 +112,21 @@ Riesgo principal:
 1. Reemplazo total del detalle en cada guardado masivo.
 2. Recalculo completo de `toma_resumen` al finalizar.
 3. Multiples clientes enviando payloads grandes al mismo tiempo.
-4. Dependencia de una sola base PostgreSQL sin cache distribuido real para sesiones o busquedas.
+4. Login simultaneo: bcrypt puede llevar el p95 cerca de 6 segundos si los 25 usuarios entran al mismo tiempo exacto.
 
 ## Mejoras ya aplicadas que ayudan a este escenario
 
 - guardado masivo en `conteo_detalle`;
 - mejor priorizacion de busqueda para web y APK;
 - mejoras de UX para evitar operaciones innecesarias;
-- resumen visual de sincronizacion en movil;
+- guardado diferencial en web/web movil;
+- proteccion contra cambios hechos mientras un autoguardado esta en curso;
 - autoagregado en coincidencias exactas para reducir pasos.
 
 ## Recomendaciones siguientes si se quiere subir mas la capacidad
 
-1. Pasar de "reemplazo total" a sincronizacion diferencial tambien en web.
-2. Medir tiempos reales con una prueba de carga sobre Railway/PostgreSQL.
+1. Medir tiempos reales con una prueba de carga sobre Railway/PostgreSQL.
+2. Pedir que los usuarios inicien sesion unos minutos antes del conteo si se usara un equipo modesto.
 3. Agregar metricas de tiempo por ruta:
    - login
    - busqueda de productos
@@ -115,4 +137,4 @@ Riesgo principal:
 
 ## Conclusion
 
-Para el escenario planteado, Inventapro queda en una posicion mucho mejor que antes del ajuste de guardado por lotes. El sistema deberia soportar mucho mejor una toma de 500 productos por usuario, pero la validacion definitiva debe hacerse con prueba de carga real sobre el entorno desplegado.
+Para el escenario planteado, Inventapro queda en una posicion apta para una prueba real controlada con 20-25 usuarios en web/web movil. La corrida local ya valido el flujo completo con 25 usuarios y 600 productos por usuario. La validacion definitiva debe repetirse sobre el entorno y la red donde se ejecutara el inventario.

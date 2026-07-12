@@ -8,6 +8,7 @@
     "start": "node src/bootstrap.js",
     "migrate": "node src/db/migrate.js",
     "migrate:mysql": "node src/db/migrate-from-mysql.js",
+    "loadtest:web": "node src/scripts/loadTestConteo.js",
     "seed": "node src/db/seed.js",
     "test": "node --test",
     "check": "node --check src/bootstrap.js && node --check src/server.js && node --check src/app.js && node --check src/db/migrate.js && node --check src/db/migrate-from-mysql.js && node --check src/db/seed.js && node --test"

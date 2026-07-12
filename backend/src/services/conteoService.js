@@ -149,13 +149,13 @@ export async function listUserCountHistory(db, usuarioId, limit = 30) {
 
 export function validateTomaWindow(toma) {
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = localDateString(now);
 
   // Normalizar fecha: puede ser string ISO, string con T, o Date object de pg
   function toDateStr(value) {
     if (!value) return null;
     if (value instanceof Date) {
-      return value.toISOString().slice(0, 10);
+      return localDateString(value);
     }
     return String(value).slice(0, 10);
   }
@@ -181,6 +181,14 @@ export function validateTomaWindow(toma) {
       }
     }
   }
+}
+
+function localDateString(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0')
+  ].join('-');
 }
 
 export async function activeDraftForUser(db, conteoId, usuarioId, lock = false) {

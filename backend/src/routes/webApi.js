@@ -198,11 +198,14 @@ webApi.get('/mi/tomas', requireWebUser, requirePermission('count'), asyncHandler
             tu.estado AS asignacion_estado,
             c.id AS conteo_id, c.estado AS conteo_estado, c.version AS conteo_version,
             c.fecha_inicio, c.fecha_finalizacion,
-            COUNT(d.id)::int AS lineas
+            COALESCE((
+              SELECT COUNT(*)::int
+              FROM conteo_detalle d
+              WHERE d.conteo_id = c.id
+            ), 0)::int AS lineas
      FROM toma_usuarios tu
      INNER JOIN tomas_fisicas t ON t.id = tu.toma_id
      LEFT JOIN conteos c ON c.toma_id = tu.toma_id AND c.usuario_id = tu.usuario_id AND c.estado = 'borrador'
-     LEFT JOIN conteo_detalle d ON d.conteo_id = c.id
      WHERE tu.usuario_id = $1 AND t.estado = 'abierta' AND tu.estado != 'finalizado'
        AND NOT EXISTS (
          SELECT 1
@@ -211,9 +214,6 @@ webApi.get('/mi/tomas', requireWebUser, requirePermission('count'), asyncHandler
            AND cx.usuario_id = tu.usuario_id
            AND cx.estado = 'finalizado'
        )
-     GROUP BY t.id, t.numero_toma, t.nombre_toma, t.agencia, t.estado,
-              t.fecha_habilitacion, t.fecha_cierre, t.hora_inicio, t.hora_fin,
-              tu.estado, c.id, c.estado, c.version, c.fecha_inicio, c.fecha_finalizacion
      ORDER BY t.id DESC`,
     [req.user.id]
   );
@@ -543,7 +543,7 @@ webApi.get('/tomas', requireWebUser, requirePermission('reports'), asyncHandler(
 webApi.post('/tomas', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
   const validated = validateTomaPayload(req.body);
   const now = new Date();
-  const currentDate = now.toISOString().slice(0, 10);
+  const currentDate = localDateString(now);
   const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const fields = {
     ...validated,
@@ -1423,6 +1423,14 @@ function isIsoDate(value) {
   }
   const date = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function localDateString(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0')
+  ].join('-');
 }
 
 function dayNameEs(value) {

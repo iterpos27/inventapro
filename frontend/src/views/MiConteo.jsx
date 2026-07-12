@@ -118,6 +118,7 @@ export function MiConteo({ request }) {
   const quantityRefs = useRef(new Map());
   const lastSavedSnapshotRef = useRef('[]');
   const lastSavedItemsRef = useRef([]);
+  const itemsRef = useRef([]);
   const savingRef = useRef(false);
   const dirtyUpsertRef = useRef(new Map());
   const dirtyRemoveRef = useRef(new Set());
@@ -139,6 +140,10 @@ export function MiConteo({ request }) {
   const hasPendingDiffChanges = dirtyUpsertRef.current.size > 0 || dirtyRemoveRef.current.size > 0;
 
   const loadTomas = () => request('/mi/tomas').then((data) => setTomas(data.tomas));
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   useEffect(() => {
     loadTomas();
@@ -475,6 +480,22 @@ export function MiConteo({ request }) {
     };
   }
 
+  function clearSubmittedDirtyChanges(submitted) {
+    for (const item of submitted.upsert) {
+      const productId = Number(item.producto_id);
+      const currentQty = dirtyUpsertRef.current.get(productId);
+      if (Number(currentQty) === Number(item.cantidad)) {
+        dirtyUpsertRef.current.delete(productId);
+      }
+    }
+    for (const item of submitted.remove) {
+      const productId = Number(item.producto_id);
+      if (dirtyRemoveRef.current.has(productId)) {
+        dirtyRemoveRef.current.delete(productId);
+      }
+    }
+  }
+
   async function backToList() {
     if (conteo && hasPendingDiffChanges && validItems.length > 0 && !savingRef.current) {
       await save(false, true);
@@ -501,6 +522,7 @@ export function MiConteo({ request }) {
       return;
     }
 
+    const submittedItems = itemsRef.current;
     const payload = finish
       ? { conteo_version: conteo.version, items: validItems }
       : buildDirtyPayload();
@@ -520,10 +542,14 @@ export function MiConteo({ request }) {
         body: JSON.stringify({ conteo_version: conteo.version, ...(finish ? payload : payload) })
       });
       setConteo((current) => current ? { ...current, version: data.conteo_version, estado: data.estado } : current);
-      lastSavedSnapshotRef.current = savedSnapshot(items);
-      lastSavedItemsRef.current = items;
-      dirtyUpsertRef.current = new Map();
-      dirtyRemoveRef.current = new Set();
+      if (finish) {
+        dirtyUpsertRef.current = new Map();
+        dirtyRemoveRef.current = new Set();
+      } else {
+        clearSubmittedDirtyChanges(payload);
+      }
+      lastSavedSnapshotRef.current = savedSnapshot(submittedItems);
+      lastSavedItemsRef.current = submittedItems;
       const savedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       setSaveStatus(finish ? 'Conteo finalizado.' : `Borrador guardado automaticamente a las ${savedAt}.`);
       if (!silent) setMessage(finish ? 'Conteo finalizado' : 'Borrador guardado');
@@ -702,6 +728,7 @@ export function MiConteo({ request }) {
                     placeholder="0"
                     value={item.cantidad ?? ''}
                     onChange={(event) => handleQtyChange(item.producto_id, event.target.value)}
+                    disabled={saving}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') searchInputRef.current?.focus();
                     }}

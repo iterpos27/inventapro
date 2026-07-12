@@ -12,6 +12,7 @@
     "start": "npm run start --prefix backend",
     "migrate": "npm run migrate --prefix backend",
     "seed": "npm run seed --prefix backend",
+    "loadtest:web": "npm run loadtest:web --prefix backend",
     "check": "npm run check --prefix backend && npm run build --prefix frontend"
   },
   "engines": {
