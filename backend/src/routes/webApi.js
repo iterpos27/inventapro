@@ -1290,13 +1290,16 @@ function escapeLike(value) {
 }
 
 function buildSearchPatterns(search) {
-  const q = String(search || '').trim();
+  const q = String(search || '').trim().replace(/^all:/i, '').trim();
   const hasWildcard = /[%_]/.test(q);
-  const wildcardPattern = hasWildcard
-    ? String(q).replace(/\\/g, '\\\\')
-    : '';
-  const prefixPattern = hasWildcard ? wildcardPattern : `${escapeLike(q)}%`;
-  const containsPattern = hasWildcard ? wildcardPattern : `%${escapeLike(q)}%`;
+  const wildcardPattern = hasWildcard ? q.replace(/\\/g, '\\\\').replace(/\s+/g, '%') : '';
+  const tokenPattern = q
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(escapeLike)
+    .join('%');
+  const prefixPattern = hasWildcard ? `${wildcardPattern}%` : `${escapeLike(q)}%`;
+  const containsPattern = hasWildcard ? `%${wildcardPattern}%` : `%${tokenPattern || escapeLike(q)}%`;
   const similarityTerm = q.replace(/[%_]+/g, ' ').trim() || q;
   return {
     q,

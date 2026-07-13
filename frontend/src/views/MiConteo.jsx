@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { FeedbackToast } from '../components/FeedbackToast';
 
-const SEARCH_CACHE_KEY = 'conteo_recent_searches_v1';
+const SEARCH_CACHE_KEY = 'conteo_recent_searches_v2';
 const SEARCH_CACHE_LIMIT = 100;
 const MAX_VISIBLE_ITEMS = 50;
 const AUTO_SAVE_DELAY = 60000;
