@@ -675,7 +675,7 @@ webApi.get('/tomas/:tomaId/conteos/:conteoId/live', requireWebUser, requirePermi
     `SELECT producto_id, codigo, marca, descripcion, cantidad
      FROM conteo_detalle
      WHERE conteo_id = $1
-     ORDER BY codigo, marca, descripcion`,
+     ORDER BY id`,
     [conteoId]
   );
 
