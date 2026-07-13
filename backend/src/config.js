@@ -25,5 +25,6 @@ export const config = {
   appTimezone,
   tomaCloseIntervalMs: Number.isFinite(configuredCloseInterval) ? Math.max(60_000, configuredCloseInterval) : 60_000,
   seedAdminUser: process.env.APP_SEED_ADMIN_USER || '',
-  seedAdminPassword: process.env.APP_SEED_ADMIN_PASSWORD || ''
+  seedAdminPassword: process.env.APP_SEED_ADMIN_PASSWORD || '',
+  metricsApiKey: process.env.METRICS_API_KEY || ''
 };

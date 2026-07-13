@@ -12,7 +12,7 @@ export function notFound(req, res) {
 export function errorHandler(error, req, res, next) {
   const status = error.status || 500;
   if (status >= 500) {
-    console.error(error);
+    console.error(`[Error 500] ${req.method} ${req.path} | IP: ${req.ip || 'unknown'} | User: ${req.user?.id || 'anonymous'}`, error);
   }
   res.status(status).json({
     ok: false,

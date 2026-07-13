@@ -16,7 +16,7 @@ import { FeedbackToast } from '../components/FeedbackToast';
 const SEARCH_CACHE_KEY = 'conteo_recent_searches_v1';
 const SEARCH_CACHE_LIMIT = 100;
 const MAX_VISIBLE_ITEMS = 50;
-const AUTO_SAVE_DELAY = 180000;
+const AUTO_SAVE_DELAY = 60000;
 const MAX_COUNT_DESCRIPTION = 75;
 
 function readSearchCache() {

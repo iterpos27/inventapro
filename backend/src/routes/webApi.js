@@ -114,8 +114,6 @@ webApi.post('/auth/logout', requireWebUser, asyncHandler(async (req, res) => {
       'INSERT INTO revoked_tokens (jti, usuario_id, expira_en) VALUES ($1, $2, $3) ON CONFLICT (jti) DO NOTHING',
       [payload.jti, req.user.id, expiraEn]
     );
-    // Limpiar tokens ya expirados de la blacklist (mantenimiento)
-    await pool.query('DELETE FROM revoked_tokens WHERE expira_en < NOW()').catch(() => {});
   }
   res.json({ ok: true, message: 'Sesion cerrada correctamente' });
 }));
@@ -1507,9 +1505,17 @@ async function saveWebConteoDiff(userId, conteoId, expectedVersion, upsert, remo
   });
 }
 
+let cachedBrandingRows = null;
+let cachedBrandingExpiresAt = 0;
+
 webApi.get('/branding', asyncHandler(async (req, res) => {
-  const { rows } = await pool.query('SELECT key, value FROM system_config');
-  const branding = brandingWithAbsoluteAssets(rows, req);
+  const now = Date.now();
+  if (!cachedBrandingRows || now >= cachedBrandingExpiresAt) {
+    const { rows } = await pool.query('SELECT key, value FROM system_config');
+    cachedBrandingRows = rows;
+    cachedBrandingExpiresAt = now + 30000; // Cache por 30s
+  }
+  const branding = brandingWithAbsoluteAssets(cachedBrandingRows, req);
   res.json({ ok: true, branding });
 }));
 
@@ -1558,6 +1564,8 @@ webApi.put('/branding', requireWebUser, requirePermission('admin'), brandingUplo
   await removeReplacedBrandAsset(currentMap.brand_favicon_url, nextFaviconUrl);
 
   const { rows } = await pool.query('SELECT key, value FROM system_config');
+  cachedBrandingRows = rows;
+  cachedBrandingExpiresAt = Date.now() + 30000;
   res.json({
     ok: true,
     message: 'Configuracion de marca actualizada',

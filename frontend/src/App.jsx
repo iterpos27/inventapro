@@ -213,7 +213,14 @@ export default function App() {
   }
 
   if (checkingSession) {
-    return <div className="login-screen"><div className="login-panel"><p>Validando sesion...</p></div></div>;
+    return (
+      <div className="login-screen">
+        <div className="login-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '40px' }}>
+          <div className="session-spinner" />
+          <p style={{ margin: 0, fontWeight: '500', color: '#333' }}>Validando sesion...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!token || !user) {

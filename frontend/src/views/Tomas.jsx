@@ -39,9 +39,9 @@ export function Tomas({ request, token }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [liveTarget, setLiveTarget] = useState(null);
 
-  const load = () => request('/tomas').then((data) => setItems(data.tomas));
-  const loadUsers = () => request('/usuarios').then((data) => setUsers(data.usuarios.filter((user) => ['usuario', 'operador'].includes(user.rol) && user.estado)));
-  const loadAgencias = () => request('/agencias').then((data) => setAgencias((data.agencias || []).filter((a) => a.estado)));
+  const load = () => request('/tomas').then((data) => setItems(data.tomas)).catch((err) => setError(`Error al cargar tomas: ${err.message}`));
+  const loadUsers = () => request('/usuarios').then((data) => setUsers(data.usuarios.filter((user) => ['usuario', 'operador'].includes(user.rol) && user.estado))).catch((err) => setError(`Error al cargar usuarios: ${err.message}`));
+  const loadAgencias = () => request('/agencias').then((data) => setAgencias((data.agencias || []).filter((a) => a.estado))).catch((err) => setError(`Error al cargar agencias: ${err.message}`));
 
   useEffect(() => {
     load();

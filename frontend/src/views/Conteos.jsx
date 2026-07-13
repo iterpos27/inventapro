@@ -36,8 +36,8 @@ export function Conteos({ request, token, user }) {
   useEffect(() => {
     refreshReports();
     if (isAdmin) {
-      request('/usuarios').then((data) => setUsers(data.usuarios.filter((item) => ['usuario', 'operador'].includes(item.rol) && item.estado))).catch(() => {});
-      request('/agencias').then((data) => setAgencias((data.agencias || []).filter((a) => a.estado))).catch(() => {});
+      request('/usuarios').then((data) => setUsers(data.usuarios.filter((item) => ['usuario', 'operador'].includes(item.rol) && item.estado))).catch((err) => setError(`Error al cargar usuarios: ${err.message}`));
+      request('/agencias').then((data) => setAgencias((data.agencias || []).filter((a) => a.estado))).catch((err) => setError(`Error al cargar agencias: ${err.message}`));
     }
   }, [isAdmin]);
 
@@ -56,17 +56,22 @@ export function Conteos({ request, token, user }) {
   }), [from, tomas, status, to]);
 
   async function refreshReports() {
-    const [conteosData, tomasData, summaryData] = await Promise.all([
-      request('/conteos'),
-      request('/tomas'),
-      request(`/reportes/resumen?${new URLSearchParams({ from, to }).toString()}`)
-    ]);
-    setItems(conteosData.conteos || []);
-    setTomas(tomasData.tomas || []);
-    setSummary({
-      agencias: summaryData.agencias || [],
-      usuarios: summaryData.usuarios || []
-    });
+    setError('');
+    try {
+      const [conteosData, tomasData, summaryData] = await Promise.all([
+        request('/conteos'),
+        request('/tomas'),
+        request(`/reportes/resumen?${new URLSearchParams({ from, to }).toString()}`)
+      ]);
+      setItems(conteosData.conteos || []);
+      setTomas(tomasData.tomas || []);
+      setSummary({
+        agencias: summaryData.agencias || [],
+        usuarios: summaryData.usuarios || []
+      });
+    } catch (err) {
+      setError(`Error al cargar reportes: ${err.message}`);
+    }
   }
 
   async function openDetail(id) {

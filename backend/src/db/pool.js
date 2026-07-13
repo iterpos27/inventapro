@@ -19,6 +19,7 @@ export async function withTransaction(callback) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query('SET LOCAL statement_timeout = 15000'); // 15s timeout
     const result = await callback(client);
     await client.query('COMMIT');
     return result;

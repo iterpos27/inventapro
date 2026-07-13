@@ -50,7 +50,7 @@ const importLimiter = createRateLimiter({ windowMs: 60 * 60 * 1000, max: 6, keyP
 app.use(helmet());
 app.use(cors({ origin: config.frontendUrl, credentials: true }));
 app.use(express.json({ limit: config.jsonLimit }));
-app.use(morgan('dev'));
+app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev'));
 
 app.get('/live', (req, res) => {
   res.json({ ok: true, service: 'inventapro-backend', uptime_seconds: Math.floor(process.uptime()) });
@@ -67,6 +67,12 @@ app.get('/health', async (req, res) => {
 });
 
 app.get('/metrics', async (req, res) => {
+  if (config.metricsApiKey) {
+    const providedKey = req.query.apiKey || req.headers['x-api-key'] || req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
+    if (providedKey !== config.metricsApiKey) {
+      return res.status(401).json({ ok: false, message: 'No autorizado' });
+    }
+  }
   try {
     const [users, tomas, finalizados, logs] = await Promise.all([
       pool.query('SELECT COUNT(*)::int AS total FROM usuarios WHERE estado = TRUE'),
