@@ -98,6 +98,7 @@ app.get('/metrics', async (req, res) => {
 app.use('/api/admin/auth/login', loginLimiter);
 app.use('/api/admin/mi/productos', searchLimiter);
 app.use('/api/admin/productos/import', importLimiter);
+app.use('/api/admin/usuarios/import', importLimiter);
 
 if (config.enableMobileApi) {
   app.use('/api/v1/login', loginLimiter);

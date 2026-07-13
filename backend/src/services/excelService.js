@@ -3,6 +3,7 @@ import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import bcrypt from 'bcryptjs';
 import ExcelJS from 'exceljs';
 import { pool, withTransaction } from '../db/pool.js';
 import { AppError } from '../utils/errors.js';
@@ -209,6 +210,79 @@ export async function importProductsFromFile(file, userId) {
   }
 }
 
+export async function generateUsersTemplateExcel() {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'InventaPro';
+  const sheet = workbook.addWorksheet('Usuarios');
+  sheet.columns = [
+    { header: 'nombre', key: 'nombre', width: 34 },
+    { header: 'usuario', key: 'usuario', width: 22 },
+    { header: 'password', key: 'password', width: 22 },
+    { header: 'rol', key: 'rol', width: 16 },
+    { header: 'estado', key: 'estado', width: 12 }
+  ];
+  sheet.addRow({
+    nombre: 'OPERADOR EJEMPLO',
+    usuario: 'operador01',
+    password: 'Clave1234',
+    rol: 'usuario',
+    estado: 'activo'
+  });
+  sheet.addRow({
+    nombre: 'REPORTES EJEMPLO',
+    usuario: 'reportes01',
+    password: 'Clave1234',
+    rol: 'reportes',
+    estado: 'activo'
+  });
+  sheet.getColumn('rol').note = 'Roles permitidos: admin, supervisor, reportes, usuario, operador';
+  sheet.getColumn('estado').note = 'Valores permitidos: activo, inactivo, true, false, 1, 0';
+  styleSheet(sheet);
+  sheet.views = [{ state: 'frozen', ySplit: 1 }];
+  return {
+    buffer: await workbook.xlsx.writeBuffer(),
+    filename: `plantilla_usuarios_${timestamp()}.xlsx`
+  };
+}
+
+export async function importUsersFromFile(file) {
+  try {
+    const extension = path.extname(file.originalname || '').toLowerCase();
+    if (!['.xlsx', '.csv'].includes(extension)) {
+      throw new AppError('Formato no permitido. Use .xlsx o .csv', 422);
+    }
+
+    const headerInfo = extension === '.csv'
+      ? await readCsvHeaders(file.path)
+      : await readXlsxHeaders(file.path);
+    const { headers } = headerInfo;
+    const nombreCol = headers.nombre;
+    const usuarioCol = headers.usuario;
+    const passwordCol = headers.password || headers.contrasena || headers.clave;
+    const rolCol = headers.rol;
+    const estadoCol = headers.estado || 0;
+    if (!nombreCol || !usuarioCol || !rolCol) {
+      throw new AppError('Columnas requeridas no encontradas: nombre, usuario, rol', 422);
+    }
+
+    return await withTransaction(async (db) => {
+      const counters = extension === '.csv'
+        ? await importCsvUsers(db, file.path, nombreCol, usuarioCol, passwordCol, rolCol, estadoCol)
+        : await importXlsxUsers(db, file.path, nombreCol, usuarioCol, passwordCol, rolCol, estadoCol);
+      return {
+        procesados: counters.procesados,
+        insertados: counters.insertados,
+        actualizados: counters.actualizados,
+        omitidos: counters.omitidos
+      };
+    });
+  } finally {
+    if (file?.path) {
+      await fs.unlink(file.path).catch(() => {});
+    }
+  }
+}
+
 async function readCsvHeaders(filePath) {
   const rl = readline.createInterface({ input: createReadStream(filePath), crlfDelay: Infinity });
   let rowNumber = 0;
@@ -299,6 +373,103 @@ async function importXlsxProducts(db, filePath, codigoCol, marcaCol, descripcion
   }
   await flushProductImportBatch(db, batch, counters);
   return counters;
+}
+
+async function importCsvUsers(db, filePath, nombreCol, usuarioCol, passwordCol, rolCol, estadoCol) {
+  const rl = readline.createInterface({ input: createReadStream(filePath), crlfDelay: Infinity });
+  const counters = createImportCounters();
+  for await (const line of rl) {
+    counters.rowsRead += 1;
+    if (counters.rowsRead === 1) continue;
+    const values = parseCsvLine(line);
+    await importUserRow(db, {
+      nombre: values[nombreCol - 1],
+      usuario: values[usuarioCol - 1],
+      password: passwordCol ? values[passwordCol - 1] : '',
+      rol: values[rolCol - 1],
+      estado: estadoCol ? values[estadoCol - 1] : 'activo'
+    }, counters);
+  }
+  counters.rowsRead = Math.max(0, counters.rowsRead - 1);
+  return counters;
+}
+
+async function importXlsxUsers(db, filePath, nombreCol, usuarioCol, passwordCol, rolCol, estadoCol) {
+  const counters = createImportCounters();
+  const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(filePath, {
+    entries: 'emit',
+    sharedStrings: 'cache',
+    styles: 'ignore',
+    hyperlinks: 'ignore',
+    worksheets: 'emit'
+  });
+  let processedFirstSheet = false;
+  for await (const worksheetReader of workbookReader) {
+    if (processedFirstSheet) break;
+    processedFirstSheet = true;
+    for await (const row of worksheetReader) {
+      if (row.number === 1) continue;
+      await importUserRow(db, {
+        nombre: row.getCell(nombreCol).value,
+        usuario: row.getCell(usuarioCol).value,
+        password: passwordCol ? row.getCell(passwordCol).value : '',
+        rol: row.getCell(rolCol).value,
+        estado: estadoCol ? row.getCell(estadoCol).value : 'activo'
+      }, counters);
+    }
+  }
+  return counters;
+}
+
+async function importUserRow(db, raw, counters) {
+  const nombre = normalizeCellText(raw.nombre).slice(0, 120);
+  const usuario = normalizeUserLogin(raw.usuario);
+  const password = normalizeCellText(raw.password);
+  const rol = normalizeUserRole(raw.rol);
+  const estado = normalizeUserStatus(raw.estado);
+  if (!nombre || !usuario || !rol) {
+    counters.omitidos += 1;
+    return;
+  }
+
+  const current = await db.query('SELECT id FROM usuarios WHERE usuario = $1 LIMIT 1', [usuario]);
+  const existing = current.rows[0];
+  if (!existing && password.length < 8) {
+    counters.omitidos += 1;
+    return;
+  }
+  if (existing && password && password.length < 8) {
+    counters.omitidos += 1;
+    return;
+  }
+
+  counters.procesados += 1;
+  if (existing) {
+    if (password) {
+      const hash = await bcrypt.hash(password, 12);
+      await db.query(
+        `UPDATE usuarios
+         SET nombre = $1, password = $2, rol = $3, estado = $4, auth_version = auth_version + 1
+         WHERE id = $5`,
+        [nombre, hash, rol, estado, existing.id]
+      );
+      await db.query('UPDATE api_tokens SET revocado = TRUE WHERE usuario_id = $1 AND revocado = FALSE', [existing.id]);
+    } else {
+      await db.query(
+        'UPDATE usuarios SET nombre = $1, rol = $2, estado = $3 WHERE id = $4',
+        [nombre, rol, estado, existing.id]
+      );
+    }
+    counters.actualizados += 1;
+    return;
+  }
+
+  const hash = await bcrypt.hash(password, 12);
+  await db.query(
+    'INSERT INTO usuarios (nombre, usuario, password, rol, estado) VALUES ($1, $2, $3, $4, $5)',
+    [nombre, usuario, hash, rol, estado]
+  );
+  counters.insertados += 1;
 }
 
 function createImportCounters() {
@@ -414,6 +585,8 @@ function normalizeHeader(value) {
   return String(value?.text || value || '')
     .trim()
     .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/^\uFEFF/, '')
     .replace(/[\s_-]+/g, '');
 }
@@ -424,6 +597,31 @@ function normalizeProductCode(value) {
     return '';
   }
   return raw.replace(/\.0$/, '');
+}
+
+function normalizeUserLogin(value) {
+  return normalizeCellText(value).slice(0, 60);
+}
+
+function normalizeUserRole(value) {
+  const rol = normalizeCellText(value).toLowerCase();
+  const aliases = {
+    operaciones: 'usuario',
+    conteo: 'usuario',
+    reporte: 'reportes',
+    reports: 'reportes',
+    administrador: 'admin',
+    administracion: 'admin'
+  };
+  const normalized = aliases[rol] || rol || 'usuario';
+  return ['admin', 'supervisor', 'reportes', 'usuario', 'operador'].includes(normalized) ? normalized : '';
+}
+
+function normalizeUserStatus(value) {
+  const raw = normalizeCellText(value).toLowerCase();
+  if (!raw) return true;
+  if (['0', 'false', 'no', 'inactivo', 'desactivado'].includes(raw)) return false;
+  return true;
 }
 
 function normalizeCellText(value) {

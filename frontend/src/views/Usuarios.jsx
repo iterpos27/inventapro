@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { UserPlus, Edit3, Trash2 } from 'lucide-react';
+import { Download, Edit3, Trash2, UserPlus } from 'lucide-react';
 import { FeedbackToast } from '../components/FeedbackToast';
 import { Modal } from '../components/Modal';
+import { downloadFile } from '../services/api';
 import { formatDateTime } from '../utils/helpers';
 
-export function Usuarios({ request }) {
+export function Usuarios({ request, token }) {
   const [items, setItems] = useState([]);
   const [form, setForm] = useState({ nombre: '', usuario: '', password: '', rol: 'usuario' });
   const [editing, setEditing] = useState(null);
@@ -69,14 +70,54 @@ export function Usuarios({ request }) {
     }
   }
 
+  async function importFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setMessage('');
+    setError('');
+    try {
+      const body = new FormData();
+      body.append('archivo', file);
+      const data = await request('/usuarios/import', { method: 'POST', body });
+      const info = data.importacion;
+      setMessage(`Importados ${info.procesados}: ${info.insertados} nuevos, ${info.actualizados} actualizados, ${info.omitidos} omitidos.`);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      event.target.value = '';
+    }
+  }
+
+  async function downloadTemplate() {
+    setMessage('');
+    setError('');
+    try {
+      await downloadFile(token, '/usuarios/plantilla');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   return (
     <div className="users-page">
       <div className="admin-page-heading">
         <div />
-        <button className="primary admin-create-btn" type="button" onClick={() => { resetUserForm(); setModalOpen(true); }}>
-          <UserPlus size={16} />
-          Crear usuario
-        </button>
+        <div className="product-heading-actions">
+          <button className="outline-action product-import-btn" type="button" onClick={downloadTemplate}>
+            <Download size={16} />
+            Plantilla
+          </button>
+          <label className="outline-action product-import-btn">
+            <Download size={16} />
+            Importar Excel
+            <input type="file" accept=".xlsx,.csv" onChange={importFile} />
+          </label>
+          <button className="primary admin-create-btn" type="button" onClick={() => { resetUserForm(); setModalOpen(true); }}>
+            <UserPlus size={16} />
+            Crear usuario
+          </button>
+        </div>
       </div>
       <FeedbackToast message={message} error={error} onClose={() => { setMessage(''); setError(''); }} />
       <section className="panel users-card">

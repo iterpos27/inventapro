@@ -11,7 +11,9 @@ import { requirePermission, requireWebUser } from '../middleware/auth.js';
 import {
   brandingStorageDir,
   exportConteoExcel,
+  generateUsersTemplateExcel,
   generateConsolidadoExcel,
+  importUsersFromFile,
   importProductsFromFile,
   importStorageDir,
   ensureStorage
@@ -455,6 +457,21 @@ webApi.delete('/agencias/:id', requireWebUser, requirePermission('admin'), async
 webApi.get('/usuarios', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
   const { rows } = await pool.query('SELECT id, nombre, usuario, rol, estado, fecha_creacion FROM usuarios ORDER BY nombre');
   res.json({ ok: true, usuarios: rows });
+}));
+
+webApi.get('/usuarios/plantilla', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
+  const { buffer, filename } = await generateUsersTemplateExcel();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buffer);
+}));
+
+webApi.post('/usuarios/import', requireWebUser, requirePermission('admin'), upload.single('archivo'), asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new AppError('Seleccione un archivo valido', 422);
+  }
+  const summary = await importUsersFromFile(req.file);
+  res.status(201).json({ ok: true, importacion: summary });
 }));
 
 webApi.post('/usuarios', requireWebUser, requirePermission('admin'), asyncHandler(async (req, res) => {
