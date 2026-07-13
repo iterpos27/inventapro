@@ -47,26 +47,29 @@ function setCachedSearch(term, productos) {
   }
 }
 
-function formatDateTime(value) {
+function formatDate(value) {
   if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('es-EC', {
-    weekday: 'long',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  }).format(date).replace(',', '').toUpperCase();
+  const [year, month, day] = String(value).slice(0, 10).split('-');
+  if (!year || !month || !day) return String(value);
+  return `${day}/${month}/${year}`;
+}
+
+function dayNameEs(value) {
+  const dateValue = String(value || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return '';
+  const days = ['DOMINGO', 'LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO'];
+  return days[new Date(`${dateValue}T00:00:00Z`).getUTCDay()];
+}
+
+function formatTime(value) {
+  const time = String(value || '').slice(0, 5);
+  return /^\d{2}:\d{2}$/.test(time) ? time : '';
 }
 
 function tomaPeriodLabel(toma, field) {
-  if (field === 'habilitacion') {
-    return formatDateTime(toma.fecha_habilitacion) || [toma.fecha_habilitacion, toma.hora_inicio].filter(Boolean).join(' ');
-  }
-  return formatDateTime(toma.fecha_cierre) || [toma.fecha_cierre, toma.hora_fin].filter(Boolean).join(' ');
+  const dateValue = field === 'habilitacion' ? toma.fecha_habilitacion : toma.fecha_cierre;
+  const timeValue = field === 'habilitacion' ? toma.hora_inicio : toma.hora_fin;
+  return [dayNameEs(dateValue), formatDate(dateValue), formatTime(timeValue)].filter(Boolean).join(' ');
 }
 
 function tomaTitle(numeroToma) {
