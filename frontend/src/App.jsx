@@ -266,15 +266,15 @@ export default function App() {
             </button>
             {accountOpen ? (
               <div className="account-popover">
-                <button onClick={logout}>
+                <button type="button" onClick={() => { setAccountOpen(false); logout(); }}>
                   <LogOut size={18} />
                   Salir
                 </button>
-                <button onClick={() => { setPasswordOpen(true); setAccountOpen(false); setAccountError(''); }}>
+                <button type="button" onClick={() => { setPasswordOpen(true); setAccountOpen(false); setAccountError(''); }}>
                   <KeyRound size={18} />
                   Cambiar contrasena
                 </button>
-                <button onClick={logoutAll}>
+                <button type="button" onClick={logoutAll}>
                   <ShieldX size={18} />
                   Cerrar todas las sesiones
                 </button>

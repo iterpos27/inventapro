@@ -751,7 +751,7 @@ export function MiConteo({ request }) {
           <div className="scanner-panel">
             <div className="scanner-header">
               <strong>Escanear producto</strong>
-              <button className="search-clear" onClick={closeScanner} aria-label="Cerrar escaner">
+              <button className="scanner-close" type="button" onClick={closeScanner} aria-label="Cerrar escaner">
                 <X size={18} />
               </button>
             </div>
