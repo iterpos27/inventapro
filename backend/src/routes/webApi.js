@@ -297,7 +297,7 @@ webApi.get('/mi/conteos/:id', requireWebUser, requirePermission('count'), asyncH
   if (!conteo.rows[0]) {
     throw new AppError('Conteo no disponible', 404);
   }
-  const items = await pool.query('SELECT producto_id, codigo, marca, descripcion, cantidad FROM conteo_detalle WHERE conteo_id = $1 ORDER BY id', [conteoId]);
+  const items = await pool.query('SELECT producto_id, codigo, marca, descripcion, cantidad FROM conteo_detalle WHERE conteo_id = $1 ORDER BY id DESC', [conteoId]);
   res.json({ ok: true, conteo: conteo.rows[0], items: items.rows });
 }));
 
@@ -675,7 +675,7 @@ webApi.get('/tomas/:tomaId/conteos/:conteoId/live', requireWebUser, requirePermi
     `SELECT producto_id, codigo, marca, descripcion, cantidad
      FROM conteo_detalle
      WHERE conteo_id = $1
-     ORDER BY id`,
+     ORDER BY id DESC`,
     [conteoId]
   );
 
