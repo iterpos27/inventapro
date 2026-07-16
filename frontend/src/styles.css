@@ -3650,3 +3650,108 @@ th {
     transform: rotate(360deg);
   }
 }
+
+/* Ajustes finales para que el admin web-mobil mantenga proporciones usables. */
+@media (max-width: 768px) {
+  .shell,
+  .main,
+  .users-page,
+  .reports-page,
+  .tomas-page,
+  .toma-detail-page {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .main {
+    padding-inline: 12px;
+  }
+
+  .topbar {
+    margin-inline: -12px;
+    padding-inline: 12px;
+  }
+
+  .toma-detail-heading {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .toma-detail-heading h2 {
+    font-size: 20px;
+    line-height: 1.1;
+  }
+
+  .toma-detail-toolbar {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .toma-detail-toolbar .compact,
+  .toma-detail-toolbar .edit-text-btn,
+  .toma-detail-toolbar .delete-text-btn,
+  .toma-detail-toolbar .toggle-text-btn {
+    width: 100%;
+    min-height: 38px;
+    padding: 7px 8px;
+    font-size: 12px;
+    line-height: 1.1;
+  }
+
+  .toma-summary-card {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 12px;
+    min-height: auto;
+  }
+
+  .toma-summary-card p {
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .toma-summary-card aside {
+    min-width: 0;
+    justify-items: start;
+    gap: 4px;
+    padding-top: 8px;
+    border-top: 1px solid #d6dee8;
+  }
+
+  .toma-detail-page .toma-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .toma-detail-page .toma-metrics-grid .metric {
+    min-height: 64px;
+    padding: 10px 11px;
+  }
+
+  .toma-detail-page .toma-metrics-grid .metric span {
+    margin-bottom: 8px;
+    font-size: 11px;
+  }
+
+  .toma-detail-page .toma-metrics-grid .metric strong {
+    font-size: 16px;
+  }
+
+  .toma-participants-card {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 420px) {
+  .toma-detail-toolbar,
+  .toma-detail-page .toma-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
