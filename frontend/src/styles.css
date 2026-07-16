@@ -3653,6 +3653,14 @@ th {
 
 /* Ajustes finales para que el admin web-mobil mantenga proporciones usables. */
 @media (max-width: 768px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
   .shell,
   .main,
   .users-page,
@@ -3662,6 +3670,7 @@ th {
     width: 100%;
     max-width: none;
     min-width: 0;
+    overflow-x: clip;
   }
 
   .main {
@@ -3687,9 +3696,12 @@ th {
 
   .toma-detail-toolbar {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 7px;
+    overflow: hidden;
   }
 
   .toma-detail-toolbar .compact,
@@ -3697,13 +3709,23 @@ th {
   .toma-detail-toolbar .delete-text-btn,
   .toma-detail-toolbar .toggle-text-btn {
     width: 100%;
+    min-width: 0;
     min-height: 38px;
     padding: 7px 8px;
     font-size: 12px;
     line-height: 1.1;
+    white-space: normal;
+    overflow: hidden;
+  }
+
+  .toma-detail-toolbar svg {
+    flex: 0 0 auto;
   }
 
   .toma-summary-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     display: grid;
     grid-template-columns: 1fr;
     gap: 10px;
@@ -3745,7 +3767,24 @@ th {
   }
 
   .toma-participants-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     padding: 12px;
+    overflow: hidden;
+  }
+
+  .toma-participants-card .table-wrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .toma-participants-table {
+    width: max-content;
+    min-width: 680px;
   }
 }
 
