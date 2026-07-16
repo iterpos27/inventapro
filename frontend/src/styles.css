@@ -3658,7 +3658,6 @@ th {
   #root {
     width: 100%;
     max-width: 100%;
-    overflow-x: hidden;
   }
 
   .shell,
@@ -3670,7 +3669,19 @@ th {
     width: 100%;
     max-width: none;
     min-width: 0;
-    overflow-x: clip;
+  }
+
+  .panel,
+  .users-card,
+  .report-card,
+  .product-search-card,
+  .product-table-card,
+  .toma-create-panel,
+  .toma-table-card,
+  .toma-summary-card,
+  .toma-participants-card {
+    max-width: 100%;
+    min-width: 0;
   }
 
   .main {
@@ -3786,11 +3797,80 @@ th {
     width: max-content;
     min-width: 680px;
   }
+
+  .toma-create-panel {
+    overflow: visible;
+  }
+
+  .toma-form,
+  .inline-toma-form,
+  .inline-toma-form > *,
+  .user-picker,
+  .user-picker-heading,
+  .toma-preview {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .toma-form input,
+  .toma-form select,
+  .toma-form button,
+  .inline-toma-form input,
+  .inline-toma-form select,
+  .inline-toma-form button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .user-picker-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .user-picker-heading span {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .user-picker-heading .compact,
+  .user-picker-heading .compact-inline-submit,
+  .user-picker-heading button {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .table-wrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .tomas-table,
+  .report-table,
+  .users-table {
+    width: max-content;
+    min-width: min(620px, calc(100vw - 24px));
+  }
+
+  .tomas-table th,
+  .tomas-table td {
+    padding: 8px 7px;
+  }
+
+  .tomas-table td:first-child {
+    min-width: 145px;
+    max-width: 190px;
+    white-space: normal;
+  }
 }
 
 @media (max-width: 420px) {
   .toma-detail-toolbar,
-  .toma-detail-page .toma-metrics-grid {
+  .toma-detail-page .toma-metrics-grid,
+  .user-picker-heading span {
     grid-template-columns: 1fr;
   }
 }
