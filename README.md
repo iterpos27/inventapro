@@ -149,12 +149,16 @@ La estructura esperada y sus opciones estan en `docs/mysql-json-migration.md`.
 El repositorio esta preparado para desplegarse como un unico servicio: Express sirve la API y tambien el frontend compilado. El arranque ejecuta las migraciones pendientes y crea el administrador inicial solo si todavia no existe.
 
 1. Sube el repositorio a GitHub y crea un proyecto en Railway desde ese repositorio.
-2. Agrega un servicio PostgreSQL al mismo proyecto.
-3. En el servicio de InventaPro configura estas variables:
+2. Crea un proyecto de Supabase y copia desde **Connect > Session pooler** su URI de conexion (puerto `5432`).
+3. En el servicio de InventaPro configura estas variables (pega la URI completa de Supabase en `DATABASE_URL`):
 
 ```env
 NODE_ENV=production
-DATABASE_URL=${{Postgres.DATABASE_URL}}
+DATABASE_URL=postgresql://postgres.PROJECT_REF:CLAVE@aws-REGION.pooler.supabase.com:5432/postgres
+DATABASE_SSL=true
+DATABASE_SSL_REJECT_UNAUTHORIZED=true
+DATABASE_POOL_MAX=10
+DATABASE_POOL_CONNECTION_TIMEOUT_MS=15000
 JWT_SECRET=un_secreto_aleatorio_de_al_menos_32_caracteres
 JWT_EXPIRES_IN=8h
 TRUST_PROXY=true
@@ -177,6 +181,8 @@ flutter build apk --release --dart-define=API_BASE_URL=https://TU-DOMINIO.up.rai
 ```
 
 Los archivos Excel de `backend/storage` son temporales. Railway puede eliminarlos al reiniciar el contenedor; los datos de inventario permanecen en PostgreSQL.
+
+La migracion desde el PostgreSQL de Railway hacia Supabase, incluida una estrategia de cambio con interrupcion minima y vuelta atras, esta documentada en `docs/railway-supabase.md`.
 
 ## Respaldo automatizado
 
